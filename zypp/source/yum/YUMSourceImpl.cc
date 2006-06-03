@@ -100,7 +100,7 @@ namespace zypp
       }
       
 
-      const Pathname YUMSourceImpl::downloadMetadataFile( const Url &url, const Pathname &file_to_download )
+      const Pathname YUMSourceImpl::downloadMetadataFile( const Pathname &file_to_download )
       {
         Pathname downloaded_file;
         try
@@ -109,12 +109,12 @@ namespace zypp
         }
         catch (const Exception &e)
         {
-          ZYPP_THROW(Exception("Can't provide " + file_to_download.asString() + " from " + url.asString() ));
+          ZYPP_THROW(Exception("Can't provide " + file_to_download.asString() + " from " + url().asString() ));
         }
         return downloaded_file;
       }
 
-      void YUMSourceImpl::getPossiblyCachedMetadataFile( const Url &url, const Pathname &file_to_download, const Pathname &destination, const Pathname &cached_file, const std::string &checksumType, const std::string &checksum )
+      void YUMSourceImpl::getPossiblyCachedMetadataFile( const Pathname &file_to_download, const Pathname &destination, const Pathname &cached_file, const std::string &checksumType, const std::string &checksum )
       { 
           // if we have a cached file and its the same
           if ( PathInfo(cached_file).isExist() && checkCheckSum( cached_file, checksumType, checksum) )
@@ -127,7 +127,7 @@ namespace zypp
           else
           {
             // we dont have it or its not the same, download it.
-            Pathname downloaded_file = downloadMetadataFile( url, file_to_download);
+            Pathname downloaded_file = downloadMetadataFile( file_to_download);
             
             if ( filesystem::copy(downloaded_file, destination) != 0 )
               ZYPP_THROW(Exception("Can't copy " + downloaded_file.asString() + " to " + destination.asString()));
@@ -205,59 +205,19 @@ namespace zypp
           if ((*repomd)->type == "other")     // don't parse 'other.xml' (#159316)
             continue;
 
-          Pathname src;
-          try
-          {
-            src = provideFile(_path + (*repomd)->location);
-          }
-          catch (const Exception &e)
-          {
-            ZYPP_THROW(Exception("Can't provide " + _path.asString() + (*repomd)->location + " from " + url().asString() ));
-          }
+          getPossiblyCachedMetadataFile( _path + (*repomd)->location, local_dir + (*repomd)->location, _cache_dir + (*repomd)->location, (*repomd)->checksumType, (*repomd)->checksum );
 
-          Pathname dst = local_dir + (*repomd)->location;
-          
-          //if (0 != assert_dir(dst, 0755))
-          //  ZYPP_THROW(Exception("Cannot create directory: " + dst.asString()));
-          
-          if ( filesystem::copy(src, dst) != 0 )
-            ZYPP_THROW(Exception("Can't copy " + src.asString() + " to " + dst.asString()));
-          
-          if (! checkCheckSum( dst, (*repomd)->checksumType, (*repomd)->checksum))
-            ZYPP_THROW(Exception( (*repomd)->location + " " + N_(" fails checksum verification.") ));
-          
-            
           // if it is a patch, we read the patches individually
           if ((*repomd)->type == "patches")
           {
             // use the local copy now
-            Pathname patches_list = dst;
+            Pathname patches_list = local_dir + (*repomd)->location;
             MIL << "Reading patches file " << patches_list << std::endl;
             ifgzstream st ( patches_list.asString().c_str() );
             YUMPatchesParser patch(st, "");
             for (; !patch.atEnd(); ++patch)
             {
-              string filename = (*patch)->location;
-              Pathname patch_src;
-              Pathname patch_dst;
-              try
-              {
-                patch_src = provideFile(_path + filename);
-              }
-              catch (const Exception &e)
-              {
-                ZYPP_CAUGHT(e);
-                ZYPP_THROW(Exception("Can't provide patch " + _path.asString() + (*repomd)->location + " from " + url().asString()));
-              }
-              
-              patch_dst = local_dir + filename;
-                
-              if ( filesystem::copy(patch_src, patch_dst) != 0 )
-                ZYPP_THROW(Exception("Can't copy patch file " + patch_src.asString() + " to " + patch_dst.asString()));
-                
-              // check patch checksum
-              if (! checkCheckSum( patch_dst, (*patch)->checksumType, (*patch)->checksum))
-                ZYPP_THROW(Exception( (*repomd)->location + " " + N_(" fails checksum verification.") ));
+              getPossiblyCachedMetadataFile( _path + (*patch)->location, local_dir + (*patch)->location, _cache_dir + (*patch)->location, (*patch)->checksumType, (*patch)->checksum );
             } // end of single patch parsing
           }// end of patches file parsing
         } // end of copying

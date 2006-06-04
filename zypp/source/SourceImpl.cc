@@ -260,14 +260,27 @@ namespace zypp
 
     const Pathname SourceImpl::downloadMetadataFile( const Pathname &file_to_download )
     {
+      bool retry = true;
+      callback::SendReport<source::DownloadFileReport> report;
       Pathname downloaded_file;
-      try
+
+      report->start( selfSourceRef(), url() ); 
+      while (retry)
       {
-        downloaded_file = provideFile(file_to_download);
-      }
-      catch (const Exception &e)
-      {
-        ZYPP_THROW(Exception("Can't provide " + file_to_download.asString() + " from " + url().asString() ));
+        try
+        {
+          downloaded_file = provideFile(file_to_download);
+          report->finish( url(), DownloadFileReport::NO_ERROR, file_to_download.asString() + " downloaded " + url().asString() );
+          retry = false;
+        }
+        catch (const Exception &e)
+        {
+          if ( report->problem(url(), DownloadFileReport::IO, "Can't provide " + file_to_download.asString() + " from " + url().asString()) != DownloadFileReport::RETRY )
+          {
+            report->finish( url(), DownloadFileReport::IO, "Can't provide " + file_to_download.asString() + " from " + url().asString() );
+            ZYPP_THROW(Exception("Can't provide " + file_to_download.asString() + " from " + url().asString() ));
+          }
+        }
       }
       return downloaded_file;
     }
@@ -277,6 +290,7 @@ namespace zypp
         // if we have a cached file and its the same
         if ( PathInfo(cached_file).isExist() && is_checksum( cached_file, checksumType, checksum) )
         {
+          MIL << "file " << file_to_download << " found in previous cache. Using cached copy." << std::endl;
           // checksum is already checked.
           // we could later implement double failover and try to download if file copy fails.
           if ( filesystem::copy(cached_file, destination) != 0 )

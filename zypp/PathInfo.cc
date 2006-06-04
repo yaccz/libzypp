@@ -778,21 +778,21 @@ namespace zypp
       if ( ! istr ) {
         return string();
       }
-
       return Digest::digest( algorithm, istr );
     }
 
     bool is_checksum( const Pathname & file, const std::string &algorithm, const std::string &checksum )
     {
-      std::string alg = algorithm;
-      if (str::toLower(alg) == "sha")
+      std::string alg;
+      alg = algorithm;
+      if (str::toLower(algorithm) == "sha")
       {
         if (checksum.size() == 40)
           alg = "sha1";
         else if (checksum.size() == 64)
           alg = "sha256";
       }
-      return ( filesystem::checksum(file, algorithm) == checksum );
+      return ( filesystem::checksum(file, alg) == checksum );
     }
 
     ///////////////////////////////////////////////////////////////////

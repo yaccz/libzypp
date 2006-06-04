@@ -322,11 +322,11 @@ namespace zypp
         
         if ( need_to_refresh )
         {
-          MIL << "SuseTags source " << alias() << "has changed since last download. Re-reading metadata into " << dir_r << endl;
+          MIL << "SuseTags source " << alias() << " has changed since last download. Re-reading metadata into " << dir_r << endl;
         }
         else
         {
-          MIL << "SUSEtags source " << alias() << "has not changed. Refresh completed. timestamp of media file is  the same." << std::endl;    
+          MIL << "SUSEtags source " << alias() << " has not changed. Refresh completed. timestamp of media file is  the same." << std::endl;    
           return;
         }
         

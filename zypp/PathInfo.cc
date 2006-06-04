@@ -761,6 +761,16 @@ namespace zypp
     //
     std::string sha1sum( const Pathname & file )
     {
+      return checksum(file, "SHA1");
+    }
+
+    ///////////////////////////////////////////////////////////////////
+    //
+    //  METHOD NAME : checksum
+    //  METHOD TYPE : std::string
+    //
+    std::string checksum( const Pathname & file, const std::string &algorithm )
+    {
       if ( ! PathInfo( file ).isFile() ) {
         return string();
       }
@@ -768,7 +778,21 @@ namespace zypp
       if ( ! istr ) {
         return string();
       }
-      return Digest::digest( "SHA1", istr );
+
+      return Digest::digest( algorithm, istr );
+    }
+
+    bool is_checksum( const Pathname & file, const std::string &algorithm, const std::string &checksum )
+    {
+      std::string alg = algorithm;
+      if (str::toLower(alg) == "sha")
+      {
+        if (checksum.size() == 40)
+          alg = "sha1";
+        else if (checksum.size() == 64)
+          alg = "sha256";
+      }
+      return ( filesystem::checksum(file, algorithm) == checksum );
     }
 
     ///////////////////////////////////////////////////////////////////

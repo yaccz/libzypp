@@ -146,21 +146,6 @@ namespace zypp
         const Pathname metadataRoot() const;
         bool cacheExists();
 
-        /**
-         * wrapper around provideFile
-         * downloads a single file, providing download information callbacks
-         * \throw EXCEPTION on download failure and user abort
-         */
-        const Pathname downloadMetadataFile( const Pathname &file_to_download );
-
-        /**
-         * checks if a file exists in cache
-         * if no, downloads it, copies it in given destination, and check matching checksum
-         * if yes, compares checksum and copies it to destination locally
-         * \throw EXCEPTION on download/copy failure and user abort
-         */
-        void getPossiblyCachedMetadataFile( const Pathname &file_to_download, const Pathname &destination, const Pathname &cached_file, const std::string &checksumType, const std::string &checksum );
-
         const TmpDir downloadMetadata();
         void saveMetadataTo(const Pathname & dir_r);
         const Pathname repomdFile() const;
@@ -176,9 +161,6 @@ namespace zypp
 
 	typedef std::map<zypp::NVRA, ImplAndPackage> PackageImplMapT;
 	PackageImplMapT _package_impl;
-
-      public:
-	static bool checkCheckSum (const Pathname & filename, std::string csum_type, const std::string & csum);
 
       };
 

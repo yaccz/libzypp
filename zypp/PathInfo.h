@@ -583,6 +583,20 @@ namespace zypp
     std::string sha1sum( const Pathname & file );
     //@}
 
+    /**
+     * Compute a files checksum
+     *
+     * @return the files checksum on success, otherwise an empty string..
+     **/
+    std::string checksum( const Pathname & file, const std::string &algorithm );
+
+    /**
+     * check files checksum
+     *
+     * @return true if the checksum matchs
+     **/
+    bool is_checksum( const Pathname & file, const std::string &algorithm, const std::string &checksum );
+
     ///////////////////////////////////////////////////////////////////
     /** \name Changing permissions. */
     //@{

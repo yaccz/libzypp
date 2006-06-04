@@ -99,44 +99,6 @@ namespace zypp
         return metadataRoot() + "/repodata/repomd.xml.key";
       }
       
-
-      const Pathname YUMSourceImpl::downloadMetadataFile( const Pathname &file_to_download )
-      {
-        Pathname downloaded_file;
-        try
-        {
-          downloaded_file = provideFile(file_to_download);
-        }
-        catch (const Exception &e)
-        {
-          ZYPP_THROW(Exception("Can't provide " + file_to_download.asString() + " from " + url().asString() ));
-        }
-        return downloaded_file;
-      }
-
-      void YUMSourceImpl::getPossiblyCachedMetadataFile( const Pathname &file_to_download, const Pathname &destination, const Pathname &cached_file, const std::string &checksumType, const std::string &checksum )
-      { 
-          // if we have a cached file and its the same
-          if ( PathInfo(cached_file).isExist() && checkCheckSum( cached_file, checksumType, checksum) )
-          {
-            // checksum is already checked.
-            // we could later implement double failover and try to download if file copy fails.
-            if ( filesystem::copy(cached_file, destination) != 0 )
-              ZYPP_THROW(Exception("Can't copy " + cached_file.asString() + " to " + destination.asString()));
-          }
-          else
-          {
-            // we dont have it or its not the same, download it.
-            Pathname downloaded_file = downloadMetadataFile( file_to_download);
-            
-            if ( filesystem::copy(downloaded_file, destination) != 0 )
-              ZYPP_THROW(Exception("Can't copy " + downloaded_file.asString() + " to " + destination.asString()));
-  
-            if (! checkCheckSum( destination, checksumType, checksum))
-              ZYPP_THROW(Exception( destination.asString() + " " + N_(" fails checksum verification.") ));
-          }
-      }
-
       const TmpDir YUMSourceImpl::downloadMetadata()
       {
         TmpDir tmpdir;
@@ -292,7 +254,7 @@ namespace zypp
           else
           {
             Pathname file_to_check = metadataRoot() + _path + (*repomd)->location;
-            if (! checkCheckSum( file_to_check, (*repomd)->checksumType, (*repomd)->checksum))
+            if (! filesystem::is_checksum( file_to_check, (*repomd)->checksumType, (*repomd)->checksum))
             {
               ZYPP_THROW(Exception( (*repomd)->location + " " + N_("fails checksum verification.") ));
             }
@@ -308,7 +270,7 @@ namespace zypp
               for (; !patch.atEnd(); ++patch)
               {
                 Pathname patch_filename = metadataRoot() + _path + (*patch)->location;
-                if (! checkCheckSum(patch_filename, (*patch)->checksumType, (*patch)->checksum))
+                if (! filesystem::is_checksum(patch_filename, (*patch)->checksumType, (*patch)->checksum))
                 {
                   ZYPP_THROW(Exception( (*patch)->location + " " + N_("fails checksum verification.") ));
                 }
@@ -1291,42 +1253,6 @@ namespace zypp
     }
     return cap;
   }
-
-
-
-
-      bool YUMSourceImpl::checkCheckSum (const Pathname & filename, std::string csum_type, const std::string & csum)
-      {
-	MIL << "Checking checksum for " << filename << " as type: " << csum_type << "; value: " << csum << endl;
-	if (str::toLower(csum_type) == "sha")
-	{
-	  if (csum.size() == 40)
-	    csum_type = "sha1";
-	  else if (csum.size() == 64)
-	    csum_type = "sha256";
-	  DBG << "Checksum size is " << csum.size() << ", checksum type set to " << csum_type << endl;
-	}
-	ifstream st(filename.asString().c_str());
-	std::string dig = Digest::digest (csum_type, st, 4096);
-	if (dig == "")
-	{
-	  ERR << "Cannot compute the checksum" << endl;
-	  return false;
-	}
-	dig = str::toLower (dig);
-	bool ret = (dig == str::toLower(csum));
-	if (ret)
-        {
-	  MIL << "Checksums are the same" << endl;
-          return true;
-        }
-	else
-        {
-          WAR << "Checksum missmatch: metadata: " << csum << "; real: " << dig << endl;
-          return false;
-        }
-        return false;
-      }
 
     } // namespace yum
     /////////////////////////////////////////////////////////////////

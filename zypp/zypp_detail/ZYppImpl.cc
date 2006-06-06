@@ -60,8 +60,6 @@ namespace zypp
       return ret;
     }
 
-    static TmpDir zypp_tmp_dir("/var/tmp", "zypp.");
-    
     ///////////////////////////////////////////////////////////////////
     //
     //	METHOD NAME : ZYppImpl::ZYppImpl
@@ -79,7 +77,7 @@ namespace zypp
       
       MIL << "initializing keyring..." << std::endl;
       //_keyring = new KeyRing(homePath() + Pathname("/keyring/all"), homePath() + Pathname("/keyring/trusted"));
-      _keyring = new KeyRing(_tmp_dir.path());
+      _keyring = new KeyRing(tmpPath());
 
       // detect the true architecture
       struct utsname buf;
@@ -369,7 +367,7 @@ namespace zypp
 
     const Pathname ZYppImpl::tmpPath() const
     { 
-      //return _tmp_dir.path();
+      static TmpDir zypp_tmp_dir("/var/tmp", "zypp.");
       return zypp_tmp_dir.path();
     }
     

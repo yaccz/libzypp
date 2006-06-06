@@ -141,7 +141,6 @@ namespace zypp
       void setPartitions(const DiskUsageCounter::MountPointSet &mp);
 
     private:
-      TmpDir _tmp_dir;
       /** */
       ResPoolManager _pool;
       /** */

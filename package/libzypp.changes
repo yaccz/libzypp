@@ -1,4 +1,12 @@
 -------------------------------------------------------------------
+Tue Jun  6 17:30:46 CEST 2006 - dmacvicar@suse.de
+
+- Fixes unneeded file download, and add download callbacks
+  (still need yast side) #181204 and #160206
+- Fix stalle tmpdir due to cyclic references, using a master
+  TmpDir for zypp. # 178292
+
+-------------------------------------------------------------------
 Fri Jun  2 16:09:03 CEST 2006 - schubi@suse.de
 
 -latest fi translation added

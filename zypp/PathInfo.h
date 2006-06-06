@@ -28,6 +28,7 @@ extern "C"
 #include <map>
 
 #include "zypp/Pathname.h"
+#include "zypp/CheckSum.h"
 
 ///////////////////////////////////////////////////////////////////
 namespace zypp
@@ -595,7 +596,7 @@ namespace zypp
      *
      * @return true if the checksum matchs
      **/
-    bool is_checksum( const Pathname & file, const std::string &algorithm, const std::string &checksum );
+    bool is_checksum( const Pathname & file, const CheckSum &checksum );
 
     ///////////////////////////////////////////////////////////////////
     /** \name Changing permissions. */

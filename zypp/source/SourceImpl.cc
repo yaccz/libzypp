@@ -260,10 +260,11 @@ namespace zypp
 
     const Pathname SourceImpl::downloadMetadataFile( const Pathname &file_to_download )
     {
+      
+      Pathname downloaded_file;
+      
       bool retry = true;
       callback::SendReport<source::DownloadFileReport> report;
-      Pathname downloaded_file;
-
       report->start( selfSourceRef(), url() ); 
       while (retry)
       {
@@ -285,12 +286,13 @@ namespace zypp
       return downloaded_file;
     }
 
-    void SourceImpl::getPossiblyCachedMetadataFile( const Pathname &file_to_download, const Pathname &destination, const Pathname &cached_file, const std::string &checksumType, const std::string &checksum )
-    { 
+    void SourceImpl::getPossiblyCachedMetadataFile( const Pathname &file_to_download, const Pathname &destination, const Pathname &cached_file, const CheckSum &checksum )
+    {
+        Url file_url( url().asString() + file_to_download.asString() );
         // if we have a cached file and its the same
-        if ( PathInfo(cached_file).isExist() && is_checksum( cached_file, checksumType, checksum) )
+        if ( PathInfo(cached_file).isExist() && (! checksum.empty()) && is_checksum( cached_file, checksum ) )
         {
-          MIL << "file " << file_to_download << " found in previous cache. Using cached copy." << std::endl;
+          MIL << "file " << file_url << " found in previous cache. Using cached copy." << std::endl;
           // checksum is already checked.
           // we could later implement double failover and try to download if file copy fails.
           if ( filesystem::copy(cached_file, destination) != 0 )
@@ -304,8 +306,26 @@ namespace zypp
           if ( filesystem::copy(downloaded_file, destination) != 0 )
             ZYPP_THROW(Exception("Can't copy " + downloaded_file.asString() + " to " + destination.asString()));
 
-          if (! is_checksum( destination, checksumType, checksum))
-            ZYPP_THROW(Exception( destination.asString() + " " + N_(" fails checksum verification.") ));
+          callback::SendReport<DigestReport> report;
+          if ( checksum.empty() )
+          {
+            MIL << "File " <<  file_url << " has no checksum available." << std::endl;
+            if ( report->askUserToAcceptNoDigest(file_to_download) )
+            {
+              MIL << "User accepted " <<  file_url << " with no checksum." << std::endl;
+              return;
+            }
+            else
+            {
+              ZYPP_THROW(Exception( file_url.asString() + " " + N_(" miss checksum.") ));
+            }
+          }
+          else
+          {
+            if (! is_checksum( destination, checksum))
+              ZYPP_THROW(Exception( file_url.asString() + " " + N_(" fails checksum verification.") ));
+          }
+          
         }
     }
 

@@ -167,7 +167,7 @@ namespace zypp
           if ((*repomd)->type == "other")     // don't parse 'other.xml' (#159316)
             continue;
 
-          getPossiblyCachedMetadataFile( _path + (*repomd)->location, local_dir + (*repomd)->location, _cache_dir + (*repomd)->location, (*repomd)->checksumType, (*repomd)->checksum );
+          getPossiblyCachedMetadataFile( _path + (*repomd)->location, local_dir + (*repomd)->location, _cache_dir + (*repomd)->location, CheckSum((*repomd)->checksumType, (*repomd)->checksum) );
 
           // if it is a patch, we read the patches individually
           if ((*repomd)->type == "patches")
@@ -179,7 +179,7 @@ namespace zypp
             YUMPatchesParser patch(st, "");
             for (; !patch.atEnd(); ++patch)
             {
-              getPossiblyCachedMetadataFile( _path + (*patch)->location, local_dir + (*patch)->location, _cache_dir + (*patch)->location, (*patch)->checksumType, (*patch)->checksum );
+              getPossiblyCachedMetadataFile( _path + (*patch)->location, local_dir + (*patch)->location, _cache_dir + (*patch)->location, CheckSum((*patch)->checksumType, (*patch)->checksum) );
             } // end of single patch parsing
           }// end of patches file parsing
         } // end of copying
@@ -254,7 +254,7 @@ namespace zypp
           else
           {
             Pathname file_to_check = metadataRoot() + _path + (*repomd)->location;
-            if (! filesystem::is_checksum( file_to_check, (*repomd)->checksumType, (*repomd)->checksum))
+            if (! filesystem::is_checksum( file_to_check, CheckSum((*repomd)->checksumType, (*repomd)->checksum)))
             {
               ZYPP_THROW(Exception( (*repomd)->location + " " + N_("fails checksum verification.") ));
             }
@@ -270,7 +270,7 @@ namespace zypp
               for (; !patch.atEnd(); ++patch)
               {
                 Pathname patch_filename = metadataRoot() + _path + (*patch)->location;
-                if (! filesystem::is_checksum(patch_filename, (*patch)->checksumType, (*patch)->checksum))
+                if (! filesystem::is_checksum(patch_filename, CheckSum((*patch)->checksumType, (*patch)->checksum)))
                 {
                   ZYPP_THROW(Exception( (*patch)->location + " " + N_("fails checksum verification.") ));
                 }

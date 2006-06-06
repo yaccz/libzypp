@@ -23,6 +23,7 @@
 #include "zypp/Source.h"
 #include "zypp/ResStore.h"
 #include "zypp/Pathname.h"
+#include "zypp/CheckSum.h"
 #include "zypp/media/MediaManager.h"
 #include "zypp/source/MediaSet.h"
 
@@ -275,7 +276,7 @@ namespace zypp
          * if yes, compares checksum and copies it to destination locally
          * \throw EXCEPTION on download/copy failure and user abort
          */
-        void getPossiblyCachedMetadataFile( const Pathname &file_to_download, const Pathname &destination, const Pathname &cached_file, const std::string &checksumType, const std::string &checksum );
+        void getPossiblyCachedMetadataFile( const Pathname &file_to_download, const Pathname &destination, const Pathname &cached_file, const CheckSum &checksum );
 
     protected:
       /** All resolvables provided by this source. */

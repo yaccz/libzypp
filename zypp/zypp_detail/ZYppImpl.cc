@@ -60,6 +60,8 @@ namespace zypp
       return ret;
     }
 
+    static TmpDir zypp_tmp_dir("/var/tmp", "zypp.");
+    
     ///////////////////////////////////////////////////////////////////
     //
     //	METHOD NAME : ZYppImpl::ZYppImpl
@@ -72,7 +74,6 @@ namespace zypp
     , _target(0)
     , _resolver( new Resolver(_pool.accessor()) )
     , _disk_usage()
-    , _tmp_dir("/var/tmp", "zypp.")
     {
       MIL << "defaultTextLocale: '" << _textLocale << "'" << endl;
       
@@ -368,7 +369,8 @@ namespace zypp
 
     const Pathname ZYppImpl::tmpPath() const
     { 
-      return _tmp_dir.path();
+      //return _tmp_dir.path();
+      return zypp_tmp_dir.path();
     }
     
     /******************************************************************

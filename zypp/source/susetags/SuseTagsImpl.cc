@@ -92,7 +92,16 @@ namespace zypp
       
       bool SuseTagsImpl::downloadNeeded(const Pathname & localdir)
       {
-        Pathname new_media_file = provideFile("media.1/media");
+        Pathname new_media_file;
+        try {
+          new_media_file = tryToProvideFile("media.1/media");
+        }
+        catch( const Exception &e )
+        {
+          MIL << "media file used to determine if source changed not found. Assuming refresh needed." << std::endl;
+          return true;
+        }
+        
         // before really download all the data and init the cache, check
         // if the source has really changed, otherwise, make it quick
         Pathname cached_media_file = localdir + "/MEDIA/media.1/media";
@@ -153,6 +162,8 @@ namespace zypp
       
       TmpDir SuseTagsImpl::downloadMetadata()
       {
+        resetMediaVerifier();
+            
         TmpDir tmpdir;
         MIL << "Downloading metadata to " << tmpdir.path() << std::endl;
         
@@ -260,6 +271,10 @@ namespace zypp
         
         // now we have the content file copied, we need to init data and descrdir from the product
         readContentFile(local_dir + "/DATA/content");
+        
+        // make sure a local descr dir exists
+        if ( assert_dir( local_dir + "/DATA/descr") != 0 )
+          ZYPP_THROW (Exception( "Error. Can't create local descr directory. "));
         
         // we can get the list of files in description dir in 2 ways
         // from the checksum list, or ls'ing the dir via directory.yast

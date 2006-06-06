@@ -271,6 +271,11 @@ namespace zypp
         const Pathname downloadMetadataFile( const Pathname &file_to_download );
 
         /**
+         * reset the media verifier to no verifier
+         */
+        void resetMediaVerifier();
+        
+        /**
          * checks if a file exists in cache
          * if no, downloads it, copies it in given destination, and check matching checksum
          * if yes, compares checksum and copies it to destination locally

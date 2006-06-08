@@ -1,7 +1,7 @@
 ## Process this file with automake to produce Makefile.in
 ## ##################################################
 
-noinst_PROGRAMS = test lock testbed aj yumparser checkpatches
+noinst_PROGRAMS = test lock testbed aj yumparser 
 
 ## ##################################################
 
@@ -26,9 +26,6 @@ testbed_LDFLAGS = -static
 
 aj_SOURCES = 	aj.cc
 aj_LDFLAGS =	-static
-
-checkpatches_SOURCES = 	checkpatches.cc
-checkpatches_LDFLAGS =	-static
 
 yumparser_SOURCES = 	yum-parser.cc
 yumparser_LDFLAGS =	-static

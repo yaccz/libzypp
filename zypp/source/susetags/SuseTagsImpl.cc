@@ -163,7 +163,7 @@ namespace zypp
       TmpDir SuseTagsImpl::downloadMetadata()
       {
         resetMediaVerifier();
-            
+        
         TmpDir tmpdir;
         MIL << "Downloading metadata to " << tmpdir.path() << std::endl;
         

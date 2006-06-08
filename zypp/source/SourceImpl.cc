@@ -286,25 +286,6 @@ namespace zypp
       }
       return downloaded_file;
     }
-
-    void SourceImpl::resetMediaVerifier()
-    {
-      try
-      {
-        media::MediaManager media_mgr;
-        MIL << "Reseting media verifier" << std::endl;
-
-        // don't try to attach media
-        media::MediaAccessId _media = _media_set->getMediaAccessId(1, true);
-        media_mgr.delVerifier(_media);
-        media_mgr.addVerifier(_media, media::MediaVerifierRef(new media::NoVerifier()));
-      }
-      catch (const Exception & excpt_r)
-      {
-          ZYPP_CAUGHT(excpt_r);
-          WAR << "Media Verifier not found." << endl;
-      }
-    }
     
     void SourceImpl::getPossiblyCachedMetadataFile( const Pathname &file_to_download, const Pathname &destination, const Pathname &cached_file, const CheckSum &checksum )
     {
@@ -349,7 +330,25 @@ namespace zypp
         }
     }
 
+    void SourceImpl::resetMediaVerifier()
+    {
+      try
+      {
+        media::MediaManager media_mgr;
+        MIL << "Reseting media verifier" << std::endl;
 
+        // don't try to attach media
+        media::MediaAccessId _media = _media_set->getMediaAccessId(1, true);
+        media_mgr.delVerifier(_media);
+        media_mgr.addVerifier(_media, media::MediaVerifierRef(new media::NoVerifier()));
+      }
+      catch (const Exception & excpt_r)
+      {
+          ZYPP_CAUGHT(excpt_r);
+          WAR << "Media Verifier not found." << endl;
+      }
+    }
+    
     const Pathname SourceImpl::provideFile(const Pathname & file_r,
 					   const unsigned media_nr,
 					   bool cached,

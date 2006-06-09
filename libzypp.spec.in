@@ -10,7 +10,7 @@
 
 # norootforbuild
 
-Name:           libzypp
+Name:           libzypp-experimental
 BuildRequires:  boost-devel curl-devel dejagnu doxygen e2fsprogs-devel gcc-c++ graphviz hal-devel libxml2-devel rpm-devel
 License:        GPL
 Group:          System/Packages
@@ -21,6 +21,8 @@ Version:        @VERSION@
 Release:        0
 Source:         zypp-@VERSION@.tar.bz2
 Prefix:         /usr
+Provides:       libzypp
+Obsoletes:      libzypp
 Provides:       yast2-packagemanager
 Obsoletes:      yast2-packagemanager
 
@@ -39,7 +41,7 @@ Authors:
     Ladislav Slezak <lslezak@suse.cz>
 
 %package devel
-Requires:       libzypp
+Requires:       libzypp-experimental
 Requires:       libxml2-devel curl-devel openssl-devel rpm-devel glibc-devel zlib-devel e2fsprogs-devel
 Requires:       bzip2 popt-devel dbus-1-devel glib2-devel hal-devel boost-devel libstdc++-devel
 Summary:        Package, Patch, Pattern, and Product Management - developers files
@@ -47,7 +49,7 @@ Group:          System/Packages
 Provides:       yast2-packagemanager-devel
 Obsoletes:      yast2-packagemanager-devel
 
-%description -n libzypp-devel
+%description -n libzypp-experimental-devel
 Package, Patch, Pattern, and Product Management - developers files
 
 Authors:

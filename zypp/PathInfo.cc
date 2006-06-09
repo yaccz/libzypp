@@ -10,9 +10,14 @@
  *
 */
 
+#include <sys/types.h> // for ::minor, ::major macros
+
 #include <iostream>
 #include <fstream>
 #include <iomanip>
+
+#include <boost/filesystem/operations.hpp>
+#include <boost/filesystem/exception.hpp>
 
 #include "zypp/base/Logger.h"
 #include "zypp/base/String.h"
@@ -22,7 +27,6 @@
 #include "zypp/PathInfo.h"
 #include "zypp/Digest.h"
 
-#include <sys/types.h> // for ::minor, ::major macros
 
 using std::string;
 
@@ -378,21 +382,18 @@ namespace zypp
         return _Log_Result( ENOTDIR );
       }
 
-      const char *const argv[] = {
-        "/bin/rm",
-        "-rf",
-        "--preserve-root",
-        "--",
-        path.asString().c_str(),
-        NULL
-      };
+      try
+        {
+          boost::filesystem::path bp( path.asString(), boost::filesystem::native );
+          boost::filesystem::remove_all( bp );
+        }
+      catch ( boost::filesystem::filesystem_error & excpt )
+        {
+          DBG << " FAILED: " << excpt.what() << std::endl;
+          return -1;
+        }
 
-      ExternalProgram prog( argv, ExternalProgram::Stderr_To_Stdout );
-      for ( string output( prog.receiveLine() ); output.length(); output = prog.receiveLine() ) {
-        DBG << "  " << output;
-      }
-      int ret = prog.close();
-      return _Log_Result( ret, "returned" );
+      return _Log_Result( 0 );
     }
 
     ///////////////////////////////////////////////////////////////////

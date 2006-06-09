@@ -321,7 +321,7 @@ namespace zypp
   /** \todo Broken design: either use return value or Exception to
   * indicate errors, not both.
   */
-  bool SourceManager::restore( Pathname root_r, bool use_caches )
+  bool SourceManager::restore( Pathname root_r, bool use_caches, std::string alias_filter )
   {
     MIL << "SourceManager restore '" << root_r << ( use_caches ? "' (use_caches)" : "'" )
         << " ..." << endl;
@@ -405,6 +405,10 @@ namespace zypp
 	    src.disable();
 	}
 	src.setAutorefresh ( it->autorefresh );
+        
+        // user only wanted one source
+        if ( (alias_filter.size() > 0) && (alias_filter ==src.alias()) )
+          break;
     }
 
     if( !report.empty() )
@@ -435,7 +439,42 @@ namespace zypp
     }
   }
 
+  std::list<std::string> SourceManager::knownAliases(const Pathname &root_r)
+  {
+    storage::PersistentStorage store;
+    std::list<std::string> aliases;
+    store.init( root_r );
 
+    std::list<storage::PersistentStorage::SourceData> sources = store.storedSources();
+
+    MIL << "Found sources: " << sources.size() << endl;
+
+    for( std::list<storage::PersistentStorage::SourceData>::iterator it = sources.begin();
+         it != sources.end(); ++it)
+    {
+      aliases.push_back(it->alias);
+    }
+    return aliases;
+  }
+    
+  std::list<Url> SourceManager::knownUrls(const Pathname &root_r)
+  {
+    storage::PersistentStorage store;
+    std::list<Url> urls;
+    store.init( root_r );
+
+    std::list<storage::PersistentStorage::SourceData> sources = store.storedSources();
+
+    MIL << "Found sources: " << sources.size() << endl;
+
+    for( std::list<storage::PersistentStorage::SourceData>::iterator it = sources.begin();
+         it != sources.end(); ++it)
+    {
+      urls.push_back(it->url);
+    }
+    return urls;
+  }
+  
   /******************************************************************
   **
   **	FUNCTION NAME : operator<<

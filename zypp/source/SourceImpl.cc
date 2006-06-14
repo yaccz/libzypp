@@ -94,6 +94,14 @@ namespace zypp
 	}
     };
 
+    /** Ctor, excl. for nullimpl only.
+     * Nullimpl has no Id (\c 0).
+     */
+    SourceImpl::SourceImpl( const null & ) : base::ProvideNumericId<SourceImpl,Source_Ref::NumericId>( NULL )
+        , _res_store_initialized(true)
+        , _tmp_metadata_dir(getZYpp()->tmpPath()) 
+    {}
+    
     ///////////////////////////////////////////////////////////////////
     //
     //	METHOD NAME : SourceImpl::SourceImpl
@@ -105,9 +113,9 @@ namespace zypp
     , _priority (0)
     , _priority_unsubscribed (0)
     , _subscribed(false)
-    , _res_store_initialized(false)
     , _base_source(false)
-    , _tmp_metadata_dir(getZYpp()->tmpPath()) 
+    , _tmp_metadata_dir(getZYpp()->tmpPath())
+    , _res_store_initialized(false)
     {
     }
 
@@ -130,7 +138,7 @@ namespace zypp
       _cache_dir = cache_dir_r;
       _subscribed = true;
       _base_source = base_source;
-     
+
       // for sources which are neither CD nor DVD we enable autorefresh by default
       _autorefresh = media::MediaAccess::canBeVolatile( _url );
 
@@ -190,7 +198,7 @@ namespace zypp
     {
       return Date::now();
     }
-    
+
     void SourceImpl::dirInfo(const unsigned media_nr,
                              std::list<std::string> &retlist,
                              const Pathname         &path_r,
@@ -348,7 +356,7 @@ namespace zypp
           WAR << "Media Verifier not found." << endl;
       }
     }
-    
+
     const Pathname SourceImpl::provideFile(const Pathname & file_r,
 					   const unsigned media_nr,
 					   bool cached,
@@ -391,14 +399,14 @@ namespace zypp
       MIL << "Cleaning up local dir" << std::endl;
       filesystem::clean_dir(dst);
       MIL << "Copying " << src << " content to local : " << dst << std::endl;
-       
+
       if ( copy_dir_content( src, dst) != 0)
       {
         filesystem::clean_dir(dst);
         ZYPP_THROW(Exception( "Can't copy downloaded data to local dir. local dir cleaned."));
       }
     }
-    
+
     const Pathname SourceImpl::provideJustFile(const Pathname & file_r,
 					   const unsigned media_nr,
 					   bool cached,
@@ -669,6 +677,7 @@ namespace zypp
 
     void SourceImpl::refresh()
     {
+	MIL << "Refreshing" << endl;
 	// TODO: will this work in chroot?
 	// TODO: better download somewhere else and then copy over
 	try{

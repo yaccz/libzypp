@@ -32,6 +32,10 @@
 #include "config.h"
 
 #define  DETECT_DIR_INDEX       0
+#define  CONNECT_TIMEOUT        60
+#define  TRANSFER_TIMEOUT       60 * 3
+#define  TRANSFER_TIMEOUT_MAX   60 * 60
+
 
 using namespace std;
 using namespace zypp::base;
@@ -77,6 +81,29 @@ namespace
 
 namespace zypp {
   namespace media {
+
+  namespace {
+    struct ProgressData
+    {
+      ProgressData(const long _timeout, const zypp::Url &_url = zypp::Url(),
+                   callback::SendReport<DownloadProgressReport> *_report=NULL)
+	: timeout(_timeout)
+	, reached(false)
+	, report(_report)
+	, ltime( time(NULL))
+	, dload( 0)
+	, uload( 0)
+	, url(_url)
+      {}
+      long                                          timeout;
+      bool                                          reached;
+      callback::SendReport<DownloadProgressReport> *report;
+      time_t                                        ltime;
+      double                                        dload;
+      double                                        uload;
+      zypp::Url                                     url;
+    };
+  }
 
 Pathname    MediaCurl::_cookieFile = "/var/lib/YaST2/cookies";
 std::string MediaCurl::_agent = "Novell ZYPP Installer";
@@ -220,27 +247,25 @@ void MediaCurl::attachTo (bool next)
     ZYPP_THROW(MediaCurlSetOptException(_url, _curlError));
   }
 
-  /*
-  ** Don't block "forever" on system calls. Curl seems to
-  ** recover nicely, if the ftp server has e.g. a 30sec
-  ** timeout. If required, it closes the connection, trys
-  ** to reopen and fetch it - this works in many cases
-  ** without to report any error to us.
-  **
-  ** Disabled, because it breaks normal operations over a
-  ** slow link :(
-  **
-  ret = curl_easy_setopt( _curl, CURLOPT_TIMEOUT, 600 );
-  if ( ret != 0 ) {
-    disconnectFrom();
-    ZYPP_THROW(MediaCurlSetOptException(_url, _curlError));
+  /**
+   * Transfer timeout
+   */
+  {
+    _xfer_timeout = TRANSFER_TIMEOUT;
+
+    std::string param(_url.getQueryParam("timeout"));
+    if( !param.empty())
+    {
+      long num = str::strtonum<long>( param);
+      if( num >= 0 && num <= TRANSFER_TIMEOUT_MAX)
+	_xfer_timeout = num;
+    }
   }
-  */
 
   /*
   ** Connect timeout
   */
-  ret = curl_easy_setopt( _curl, CURLOPT_CONNECTTIMEOUT, 60);
+  ret = curl_easy_setopt( _curl, CURLOPT_CONNECTTIMEOUT, CONNECT_TIMEOUT);
   if ( ret != 0 ) {
     disconnectFrom();
     ZYPP_THROW(MediaCurlSetOptException(_url, _curlError));
@@ -266,22 +291,80 @@ void MediaCurl::attachTo (bool next)
     }
   }
 
-  if ( _url.getScheme() == "https" ) {
-    ret = curl_easy_setopt( _curl, CURLOPT_SSL_VERIFYPEER, 1 );
+  if ( _url.getScheme() == "https" )
+  {
+    bool verify_peer = false;
+    bool verify_host = false;
+
+    std::string verify( _url.getQueryParam("ssl_verify"));
+    if( verify.empty() ||
+        verify == "yes")
+    {
+      verify_peer = true;
+      verify_host = true;
+    }
+    else
+    if( verify == "no")
+    {
+      verify_peer = false;
+      verify_host = false;
+    }
+    else
+    {
+      std::vector<std::string>                 flags;
+      std::vector<std::string>::const_iterator flag;
+      str::split( verify, std::back_inserter(flags), ",");
+      for(flag = flags.begin(); flag != flags.end(); ++flag)
+      {
+	if( *flag == "host")
+	{
+	  verify_host = true;
+	}
+	else
+	if( *flag == "peer")
+	{
+	  verify_peer = true;
+	}
+	else
+	{
+      	  disconnectFrom();
+	  ZYPP_THROW(MediaBadUrlException(_url, "Unknown ssl_verify flag"));
+	}
+      }
+    }
+
+    _ca_path = Pathname(_url.getQueryParam("ssl_capath")).asString();
+    if( _ca_path.empty())
+    {
+	_ca_path = "/etc/ssl/certs/";
+    }
+    else
+    if( !PathInfo(_ca_path).isDir() || !Pathname(_ca_path).absolute())
+    {
+        disconnectFrom();
+	ZYPP_THROW(MediaBadUrlException(_url, "Invalid ssl_capath path"));
+    }
+
+    if( verify_peer || verify_host)
+    {
+      ret = curl_easy_setopt( _curl, CURLOPT_CAPATH, _ca_path.c_str());
+      if ( ret != 0 ) {
+        disconnectFrom();
+        ZYPP_THROW(MediaCurlSetOptException(_url, _curlError));
+      }
+    }
+
+    ret = curl_easy_setopt( _curl, CURLOPT_SSL_VERIFYPEER, verify_peer ? 1L : 0L);
     if ( ret != 0 ) {
       disconnectFrom();
       ZYPP_THROW(MediaCurlSetOptException(_url, _curlError));
     }
-    ret = curl_easy_setopt( _curl, CURLOPT_CAPATH, "/etc/ssl/certs/" );
+    ret = curl_easy_setopt( _curl, CURLOPT_SSL_VERIFYHOST, verify_host ? 2L : 0L);
     if ( ret != 0 ) {
       disconnectFrom();
       ZYPP_THROW(MediaCurlSetOptException(_url, _curlError));
     }
-    ret = curl_easy_setopt( _curl, CURLOPT_SSL_VERIFYHOST, 2 );
-    if ( ret != 0 ) {
-      disconnectFrom();
-      ZYPP_THROW(MediaCurlSetOptException(_url, _curlError));
-    }
+
     ret = curl_easy_setopt ( _curl, CURLOPT_USERAGENT, _agent.c_str() );
     if ( ret != 0) {
       disconnectFrom();
@@ -711,8 +794,9 @@ void MediaCurl::doGetFileCopy( const Pathname & filename , const Pathname & targ
     }
 
     // Set callback and perform.
+    ProgressData progressData(_xfer_timeout, url, &report);
     report->start(url, dest);
-    if ( curl_easy_setopt( _curl, CURLOPT_PROGRESSDATA, &report ) != 0 ) {
+    if ( curl_easy_setopt( _curl, CURLOPT_PROGRESSDATA, &progressData ) != 0 ) {
       WAR << "Can't set CURLOPT_PROGRESSDATA: " << _curlError << endl;;
     }
 
@@ -785,8 +869,15 @@ void MediaCurl::doGetFileCopy( const Pathname & filename , const Pathname & targ
           err = "Write error";
           break;
         case CURLE_ABORTED_BY_CALLBACK:
-          err = "User abort";
-          break;
+          if( progressData.reached)
+          {
+            err  = "Timeout reached";
+	  }
+	  else
+	  {
+            err = "User abort";
+          }
+	  break;
         case CURLE_SSL_PEER_CERTIFICATE:
         default:
           err = "Unrecognized error";
@@ -947,13 +1038,53 @@ void MediaCurl::getDirInfo( filesystem::DirContent & retlist,
 int MediaCurl::progressCallback( void *clientp, double dltotal, double dlnow,
                                  double ultotal, double ulnow )
 {
-  callback::SendReport<DownloadProgressReport> *report
-    = reinterpret_cast<callback::SendReport<DownloadProgressReport>*>( clientp );
-  if (report)
+  ProgressData *pdata = reinterpret_cast<ProgressData *>(clientp);
+  if( pdata)
   {
-    // FIXME: empty URL
-    if (! (*report)->progress(int( dlnow * 100 / dltotal ), Url() ))
-      return 1;
+    // send progress report first, abort transfer if requested
+    if( pdata->report)
+    {
+      if (! (*(pdata->report))->progress(int( dlnow * 100 / dltotal ), pdata->url))
+      {
+	return 1; // abort transfer
+      }
+    }
+
+    // check if we there is a timeout set
+    if( pdata->timeout > 0)
+    {
+      time_t now = time(NULL);
+      if( now > 0)
+      {
+	bool progress = false;
+
+	// reset time of last change in case initial time()
+	// failed or the time was adjusted (goes backward)
+	if( pdata->ltime <= 0 || pdata->ltime > now)
+	  pdata->ltime = now;
+
+	// update download data if changed, mark progress
+	if( dlnow != pdata->dload)
+	{
+	  progress     = true;
+	  pdata->dload = dlnow;
+	  pdata->ltime = now;
+	}
+	// update upload data if changed, mark progress
+	if( ulnow != pdata->uload)
+	{
+	  progress     = true;
+	  pdata->uload = ulnow;
+	  pdata->ltime = now;
+	}
+
+	if( !progress && (now >= (pdata->ltime + pdata->timeout)))
+	{
+	  pdata->reached = true;
+	  return 1; // aborts transfer
+	}
+      }
+    }
   }
   return 0;
 }

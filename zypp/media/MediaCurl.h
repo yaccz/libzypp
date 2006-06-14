@@ -84,6 +84,8 @@ class MediaCurl : public MediaHandler {
     std::string _proxy;
     std::string _proxyuserpwd;
     std::string _currentCookieFile;
+    std::string _ca_path;
+    long        _xfer_timeout;
 
     static Pathname _cookieFile;
     static std::string _agent;

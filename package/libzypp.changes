@@ -1,4 +1,10 @@
 -------------------------------------------------------------------
+Wed Jun 14 17:43:37 CEST 2006 - dmacvicar@suse.de
+
+- merge trunk r3638 
+- r3739
+
+-------------------------------------------------------------------
 Mon Jun 12 15:37:10 CEST 2006 - dmacvicar@suse.de
 
 - merged trunk 3589 
@@ -15,6 +21,37 @@ Fri Jun  9 16:28:11 CEST 2006 - dmacvicar@suse.de
 
 - Allow to restore by alias
 - r3568
+
+-------------------------------------------------------------------
+Wed Jun 14 17:26:39 CEST 2006 - dmacvicar@suse.de
+
+- fix for the last stall tmpfile (#178292)
+- r3637 
+
+-------------------------------------------------------------------
+Wed Jun 14 12:06:57 CEST 2006 - mt@suse.de
+
+- Implemented transfer timeout inside of the progress callback.
+  The timeout value can be set using timeout url parameter, the
+  default transfer timeout is 180 seconds. (#181602)
+- Added ssl_verify and ssl_capath url options used in https scheme,
+  allowing to change or disable the ssl verify options. (#171622)
+- Added fallback on read failures of /etc/mtab to /proc/mounts.
+  Improved verbosity in mount and mount check related failure cases,
+  incl. /etc/mtab dump. (#181606)
+- rev 3623
+
+-------------------------------------------------------------------
+Wed Jun 14 10:49:10 CEST 2006 - kkaempf@suse.de
+
+- combine knownAliases and knownUrls in a single function.
+- rev 3616
+
+-------------------------------------------------------------------
+Mon Jun 12 16:27:46 CEST 2006 - kkaempf@suse.de
+
+- honor parallel installs in resolver context (#181103)
+- rev 3592
 
 -------------------------------------------------------------------
 Mon Jun 12 15:15:07 CEST 2006 - dmacvicar@suse.de
@@ -41,7 +78,6 @@ Fri Jun  9 16:28:11 CEST 2006 - dmacvicar@suse.de
 - r3568
 
 -------------------------------------------------------------------
->>>>>>> .merge-right.r3589
 Fri Jun  9 13:06:16 CEST 2006 - mvidner@suse.cz
 
 - Do not fork in a global destructor, perl dislikes it (#182672).

@@ -9,6 +9,9 @@
 /** \file	zypp/pool/GetResolvablesToInsDel.h
  *
 */
+
+#ifdef ZYPP9_SUPPORT
+
 #ifndef ZYPP_POOL_GETRESOLVABLESTOINSDEL_H
 #define ZYPP_POOL_GETRESOLVABLESTOINSDEL_H
 
@@ -71,4 +74,7 @@ namespace zypp
 } // namespace zypp
 ///////////////////////////////////////////////////////////////////
 #endif // ZYPP_POOL_GETRESOLVABLESTOINSDEL_H
+
+#endif //zypp9
+
 

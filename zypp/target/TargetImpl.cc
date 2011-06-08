@@ -1277,6 +1277,7 @@ namespace zypp
         buildCache();
       }
 
+#ifdef ZYPP9_SUPPORT
       // for DEPRECATED old ZyppCommitResult results:
       ///////////////////////////////////////////////////////////////////
       // build return statistics
@@ -1318,6 +1319,7 @@ namespace zypp
       }
       result._result = (toInstall - result._remaining.size());
       ///////////////////////////////////////////////////////////////////
+#endif
 
       MIL << "TargetImpl::commit(<pool>, " << policy_r << ") returns: " << result << endl;
       return result;

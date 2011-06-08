@@ -123,6 +123,8 @@ namespace zypp
     Resolver_Ptr resolver() const;
     KeyRing_Ptr keyRing() const;
   public:
+
+#ifdef ZYPP9_SUPPORT
     /** Set the preferred locale for translated labels, descriptions,
      *  etc. passed to the UI.
      * \deprecated Use ZConfig diretcly.
@@ -132,7 +134,6 @@ namespace zypp
     /** \deprecated Use ZConfig diretcly. */
     ZYPP_DEPRECATED Locale getTextLocale() const
     { return ZConfig::instance().textLocale(); }
-
   public:
     /** \name move to pool
      * \deprecated Use ResPool diretcly.
@@ -158,6 +159,7 @@ namespace zypp
      */
     const LocaleSet & getAvailableLocales() const ZYPP_DEPRECATED;
     //@}
+#endif
 
   public:
     /** Get the path where zypp related plugins store persistent data and caches   */
@@ -169,6 +171,7 @@ namespace zypp
     /** set the home, if you need to change it */
     void setHomePath( const Pathname & path );
 
+#ifdef ZYPP9_SUPPORT
     /** Get the system architecture.
       * \deprecated Use ZConfig diretcly.
     */
@@ -181,7 +184,6 @@ namespace zypp
     */
     ZYPP_DEPRECATED void setArchitecture( const Arch & arch )
     { ZConfig::instance().setSystemArchitecture( arch ); }
-
   public:
 
    /**
@@ -190,6 +192,7 @@ namespace zypp
     */
     ZYPP_DEPRECATED int applyLocks()
     { return 0; }
+#endif
 
   protected:
     /** Dtor */

@@ -29,8 +29,12 @@ namespace zypp
   public:
     pid_t lockerPid() const { return _lockerPid; }
     const std::string & lockerName() const { return _lockerName; }
+
+#ifdef ZYPP9_SUPPORT
     /** \deprecated User lockerPid */
     ZYPP_DEPRECATED pid_t locker_pid() const { return lockerPid(); }
+#endif
+
   private:
     pid_t _lockerPid;
     std::string _lockerName;

@@ -105,15 +105,23 @@ namespace zypp {
 	 */
 	bool        downloads() const;
 
-	/** \deprecated Use \ref Url::schemeIsDownloading */
+#ifdef ZYPP9_SUPPORT
+	/**
+         * \deprecated Use \ref Url::schemeIsDownloading
+         * \ingroup g_ZYpp9
+         */
 	static
 	ZYPP_DEPRECATED bool downloads(const Url &url)
         { return url.schemeIsDownloading(); }
 
-	/** \deprecated Use \ref Url::schemeIsVolatile */
+	/**
+         * \deprecated Use \ref Url::schemeIsVolatile
+         * \ingroup g_ZYpp9
+         */
 	static
 	ZYPP_DEPRECATED bool canBeVolatile(const Url &url)
         { return url.schemeIsVolatile(); }
+#endif
 
 	/**
 	 * Used Protocol if media is opened, otherwise 'unknown'.

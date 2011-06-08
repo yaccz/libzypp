@@ -107,7 +107,7 @@ HTML_OUTPUT            = html
 HTML_FILE_EXTENSION    = .html
 HTML_HEADER            =
 HTML_FOOTER            =
-HTML_STYLESHEET        =
+HTML_STYLESHEET        = doxygen.css tabs.css
 HTML_ALIGN_MEMBERS     = YES
 GENERATE_HTMLHELP      = NO
 CHM_FILE               =
@@ -178,7 +178,7 @@ EXPAND_ONLY_PREDEF     = NO
 SEARCH_INCLUDES        = YES
 INCLUDE_PATH           =
 INCLUDE_FILE_PATTERNS  =
-PREDEFINED             =
+PREDEFINED             = ZYPP9_SUPPORT
 EXPAND_AS_DEFINED      =
 SKIP_FUNCTION_MACROS   = YES
 #---------------------------------------------------------------------------

@@ -159,8 +159,10 @@ namespace zypp
 	void resultCount( InsDelCnt & total_r, InsDelCnt & done_r, InsDelCnt & error_r, InsDelCnt & skipped_r ) const;
       //@}
 
+#ifdef ZYPP9_SUPPORT
     public:
       /** \name Oldstlye interface to be removed asap.
+       * \ingroup g_ZYpp9
        * \deprecated PoolItem is not suitable for reporting errors about
        * packages to be deteled, as reloading the rpm database after commit
        * invalidates them.
@@ -184,6 +186,7 @@ namespace zypp
        **/
       PoolItemList _srcremaining ZYPP_DEPRECATED;
       //@}
+#endif
 
     public:
       /** Implementation  */

@@ -2,7 +2,7 @@
 # SOURCES                                                          #
 ####################################################################
 
-ADD_DEFINITIONS(-DLOCALEDIR="${CMAKE_INSTALL_PREFIX}/share/locale" -DTEXTDOMAIN="zypp" )
+ADD_DEFINITIONS(-DLOCALEDIR="${CMAKE_INSTALL_PREFIX}/share/locale" -DTEXTDOMAIN="zypp" -DZYPP9_SUPPORT)
 
 INCLUDE_DIRECTORIES(${CMAKE_CURRENT_BINARY_DIR})
 #FILE(WRITE filename "message to write"... )

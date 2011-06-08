@@ -544,11 +544,12 @@ namespace zypp
       bool
       downloads(MediaAccessId accessId) const;
 
+#ifdef ZYPP9_SUPPORT
      /** \deprecated Use \ref Url::schemeIsDownloading */
       static
       ZYPP_DEPRECATED bool downloads(const Url &url)
       { return url.schemeIsDownloading(); }
-
+#endif
       /**
        * Returns the \ref MediaAccessUrl of the media access id.
        *
@@ -610,9 +611,14 @@ namespace zypp
       void
       attach(MediaAccessId accessId);
 
-      /** \deprecated Simply use \ref attach. */
+#ifdef ZYPP9_SUPPORT
+      /**
+       * \ingroup g_ZYpp9
+       * \deprecated Simply use \ref attach.
+       */
       ZYPP_DEPRECATED void attachDesiredMedia(MediaAccessId accessId)
       { attach( accessId ); }
+#endif
 
       /**
        * Release the attached media and optionally eject.

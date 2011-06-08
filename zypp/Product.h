@@ -87,14 +87,17 @@ namespace zypp
     /** The product flavor (LiveCD Demo, FTP edition,...). */
     std::string flavor() const;
 
+#ifdef ZYPP9_SUPPORT
     /** Get the product type
      * Well, in an ideal world there is only one base product.
      * It's the installed product denoted by a symlink in
      * \c /etc/products.d.
+     * \ingroup g_ZYpp9
      * \deprecated Use isTargetDistribution to test for the installed base product,
      * other wise type is empty for almost all products.
     */
     std::string type() const ZYPP_DEPRECATED;
+#endif
 
     /** The product flags */
     std::list<std::string> flags() const;

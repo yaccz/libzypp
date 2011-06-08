@@ -151,8 +151,11 @@ namespace zypp
     typedef std::unary_function<ResObject::constPtr, bool> ResObjectFilterFunctor;
     typedef boost::function<bool ( ResObject::constPtr )> ResFilter;
 
+#ifdef ZYPP9_SUPPORT
     /** Select ResObject by kind. \deprecated include filter.h and use filter::ByKind. */
     ZYPP_DEPRECATED typedef filter::ByKind ByKind;
+#endif
+
     /** */
     template<class _Res>
       inline filter::ByKind byKind()

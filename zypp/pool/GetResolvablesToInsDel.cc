@@ -9,6 +9,8 @@
 /** \file	zypp/pool/GetResolvablesToInsDel.cc
  *
 */
+#ifdef ZYPP9_SUPPORT
+
 #include <iostream>
 #include <set>
 
@@ -364,3 +366,4 @@ namespace zypp
 } // namespace zypp
 ///////////////////////////////////////////////////////////////////
 
+#endif

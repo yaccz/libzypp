@@ -102,6 +102,7 @@ namespace zypp
 
   ///////////////////////////////////////////////////////////////////
 
+#ifdef ZYPP9_SUPPORT
   void ZYpp::setRequestedLocales( const LocaleSet & locales_r )
   { sat::Pool::instance().setRequestedLocales( locales_r ); }
 
@@ -110,7 +111,7 @@ namespace zypp
 
   const LocaleSet & ZYpp::getAvailableLocales() const
   { return sat::Pool::instance().getAvailableLocales(); }
-
+#endif
 
   Pathname ZYpp::homePath() const
   { return _pimpl->homePath(); }

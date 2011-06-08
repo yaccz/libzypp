@@ -168,8 +168,10 @@ namespace zypp
     return std::string();
   }
 
+#ifdef ZYPP9_SUPPORT
   std::string Product::type() const
   { return lookupStrAttribute( sat::SolvAttr::productType ); }
+#endif
 
   std::list<std::string> Product::flags() const
   {

@@ -50,11 +50,15 @@ namespace zypp
   ///////////////////////////////////////////////////////////////////
 
   ZYppCommitResult::ZYppCommitResult()
-  : _result(0), _pimpl( new Impl )
+  :
+      _result(0),
+      _pimpl( new Impl )
   {}
 
   ZYppCommitResult::ZYppCommitResult( const Pathname & root_r )
-  : _result(0), _pimpl( new Impl )
+  :
+      _result(0),
+      _pimpl( new Impl )
   { _pimpl->_root = root_r; }
 
   const Pathname & ZYppCommitResult::root() const

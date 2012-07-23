@@ -823,7 +823,10 @@ Url MediaCurl::getFileUrl(const Pathname & filename) const
   }
   else
   {
-    path += filename.asString();
+    if ( newurl.getScheme() == "http" && path == "/" )
+      path = filename.asString(); // no '//' path for http as some servers choke
+    else
+      path += filename.asString();
   }
 
   newurl.setPathName(path);

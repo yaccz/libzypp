@@ -21,7 +21,7 @@ namespace repo
   const RepoType RepoType::RPMMD(RepoType::RPMMD_e);
   const RepoType RepoType::YAST2(RepoType::YAST2_e);
   const RepoType RepoType::RPMPLAINDIR(RepoType::RPMPLAINDIR_e);
-  const RepoType RepoType::RUBYGEM(RepoType::RUBYGEM_e);
+  const RepoType RepoType::RUBYGEMS(RepoType::RUBYGEMS_e);
   const RepoType RepoType::NONE(RepoType::NONE_e);
 
   RepoType::RepoType(const std::string & strval_r)
@@ -50,8 +50,8 @@ namespace repo
       _table["plaindir"]
       = RepoType::RPMPLAINDIR_e;
 
-      _table["rubygem"]
-      = RepoType::RUBYGEM_e;
+      _table["rubygems"]
+      = RepoType::RUBYGEMS_e;
 
       _table["none"]
       = RepoType::NONE_e;
@@ -77,7 +77,7 @@ namespace repo
       _table[RPMMD_e]		= "rpm-md";
       _table[YAST2_e]		= "yast2";
       _table[RPMPLAINDIR_e]	= "plaindir";
-      _table[RUBYGEM_e]		= "rubygem";
+      _table[RUBYGEMS_e]		= "rubygems";
       _table[NONE_e]		= "NONE";
     }
     return _table[_type];

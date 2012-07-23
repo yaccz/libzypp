@@ -7,8 +7,8 @@
 |                                                                      |
 \---------------------------------------------------------------------*/
 
-#ifndef ZYPP_SOURCE_RUBYGEM_DOWNLOADER
-#define ZYPP_SOURCE_RUBYGEM_DOWNLOADER
+#ifndef ZYPP_SOURCE_RUBYGEMS_DOWNLOADER
+#define ZYPP_SOURCE_RUBYGEMS_DOWNLOADER
 
 #include "zypp/Url.h"
 #include "zypp/Pathname.h"
@@ -22,11 +22,11 @@ namespace zypp
 {
   namespace repo
   {
-    namespace rubygem
+    namespace rubygems
     {
 
       /**
-       * \short Downloader for rubygem repositories
+       * \short Downloader for rubygems repositories
        * Encapsulates all the knowledge of which files have
        * to be downloaded to the local disk.
        */
@@ -62,8 +62,8 @@ namespace zypp
 	Pathname _delta_dir;
       };
 
-    } // ns rubygem
+    } // ns rubygems
   } // ns source
 } // ns zypp
 
-#endif // ZYPP_SOURCE_RUBYGEM_DOWNLOADER
+#endif // ZYPP_SOURCE_RUBYGEMS_DOWNLOADER

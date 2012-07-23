@@ -11,7 +11,7 @@
 #include "zypp/Locale.h"
 #include "zypp/ZConfig.h"
 #include "zypp/repo/MediaInfoDownloader.h"
-#include "zypp/repo/rubygem/Downloader.h"
+#include "zypp/repo/rubygems/Downloader.h"
 #include "zypp/parser/ParseException.h"
 #include "zypp/base/UserRequestException.h"
 #include "zypp/KeyContext.h" // for SignatureFileChecker
@@ -22,7 +22,7 @@ namespace zypp
 {
   namespace repo
   {
-    namespace rubygem
+    namespace rubygems
     {
 
       Downloader::Downloader( const RepoInfo &repoinfo, const Pathname &delta_dir )
@@ -60,6 +60,6 @@ namespace zypp
 		 reset();
       }
 
-    } // ns rubygem
+    } // ns rubygems
   } // ns source
 } // ns zypp

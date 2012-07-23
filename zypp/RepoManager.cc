@@ -41,7 +41,7 @@
 #include "zypp/repo/ServiceRepos.h"
 #include "zypp/repo/yum/Downloader.h"
 #include "zypp/repo/susetags/Downloader.h"
-#include "zypp/repo/rubygem/Downloader.h"
+#include "zypp/repo/rubygems/Downloader.h"
 
 #include "zypp/parser/plaindir/RepoParser.h"
 #include "zypp/repo/PluginServices.h"
@@ -708,7 +708,7 @@ namespace zypp
       }
       break;
 
-      case RepoType::RUBYGEM_e :
+      case RepoType::RUBYGEMS_e :
       {
         status = RepoStatus( productdatapath + "/Marshal.4.8.Z");
       }
@@ -750,7 +750,7 @@ namespace zypp
         p = Pathname(productdatapath + "/cookie");
         break;
 
-      case RepoType::RUBYGEM_e :
+      case RepoType::RUBYGEMS_e :
         p = Pathname(productdatapath + "/Marshal.4.8.Z");
         break;
 
@@ -843,7 +843,7 @@ namespace zypp
 
       if ( ( repokind.toEnum() == RepoType::RPMMD_e ) ||
            ( repokind.toEnum() == RepoType::YAST2_e ) ||
-	   ( repokind.toEnum() == RepoType::RUBYGEM_e ) )
+	   ( repokind.toEnum() == RepoType::RUBYGEMS_e ) )
       {
         MediaSetAccess media(url);
         shared_ptr<repo::Downloader> downloader_ptr;
@@ -853,12 +853,12 @@ namespace zypp
         else if ( repokind.toEnum() == RepoType::YAST2_e )
           downloader_ptr.reset( new susetags::Downloader(info, mediarootpath));
 	else
-	  downloader_ptr.reset(new rubygem::Downloader(info, mediarootpath));
+	  downloader_ptr.reset(new rubygems::Downloader(info, mediarootpath));
 
         RepoStatus newstatus;
-        if ( repokind.toEnum() == RepoType::RUBYGEM_e )
+        if ( repokind.toEnum() == RepoType::RUBYGEMS_e )
 	{
-	  WAR << "No status check supportrd for RUBYGEM (you must use forced refresh)" << endl;
+	  WAR << "No status check supportrd for RUBYGEMS (you must use forced refresh)" << endl;
 	  newstatus = oldstatus;
 	}
 	else
@@ -996,7 +996,7 @@ namespace zypp
 
         if ( ( repokind.toEnum() == RepoType::RPMMD_e ) ||
              ( repokind.toEnum() == RepoType::YAST2_e ) ||
-             ( repokind.toEnum() == RepoType::RUBYGEM_e ) )
+             ( repokind.toEnum() == RepoType::RUBYGEMS_e ) )
         {
           MediaSetAccess media(url);
           shared_ptr<repo::Downloader> downloader_ptr;
@@ -1008,7 +1008,7 @@ namespace zypp
           else if ( repokind.toEnum() == RepoType::YAST2_e )
             downloader_ptr.reset( new susetags::Downloader(info, mediarootpath) );
           else
-            downloader_ptr.reset( new rubygem::Downloader(info, mediarootpath) );
+            downloader_ptr.reset( new rubygems::Downloader(info, mediarootpath) );
 
           /**
            * Given a downloader, sets the other repos raw metadata
@@ -1188,7 +1188,7 @@ namespace zypp
       case RepoType::RPMMD_e :
       case RepoType::YAST2_e :
       case RepoType::RPMPLAINDIR_e :
-      case RepoType::RUBYGEM_e :
+      case RepoType::RUBYGEMS_e :
       {
         // Take care we unlink the solvfile on exception
         ManagedFile guard( solvfile, filesystem::unlink );
@@ -1276,15 +1276,15 @@ namespace zypp
     {
       MediaSetAccess access(url);
 
-      // guess rubygem repo
+      // guess rubygems repo
       if ( ( url.getScheme() == "http" || url.getScheme() == "https" ) && url.getHost() == "rubygems.org" )
       {
 	try
 	{
 	  if ( access.doesFileExist(path/"/Marshal.4.8.Z") )
 	  {
-	    MIL << "Probed type RUBYGEM at " << url << " (" << path << ")" << endl;
-	    return repo::RepoType::RUBYGEM;
+	    MIL << "Probed type RUBYGEMS at " << url << " (" << path << ")" << endl;
+	    return repo::RepoType::RUBYGEMS;
 	  }
 	}
 	catch ( const media::MediaException &e )

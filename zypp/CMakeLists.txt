@@ -787,12 +787,12 @@ SET( zypp_repo_susetags_HEADERS
   repo/susetags/Downloader.h
 )
 
-SET( zypp_repo_rubygem_SRCS
-  repo/rubygem/Downloader.cc
+SET( zypp_repo_rubygems_SRCS
+  repo/rubygems/Downloader.cc
 )
 
-SET( zypp_repo_rubygem_HEADERS
-  repo/rubygem/Downloader.h
+SET( zypp_repo_rubygems_HEADERS
+  repo/rubygems/Downloader.h
 )
 
 SET( zypp_ws_SRCS
@@ -838,7 +838,7 @@ ${zypp_url_SRCS}
 ${zypp_repo_SRCS}
 ${zypp_repo_yum_SRCS}
 ${zypp_repo_susetags_SRCS}
-${zypp_repo_rubygem_SRCS}
+${zypp_repo_rubygems_SRCS}
 ${zypp_repo_data_SRCS}
 ${zypp_target_rpm_SRCS}
 ${zypp_target_hal_SRCS}

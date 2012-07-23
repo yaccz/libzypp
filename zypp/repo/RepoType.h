@@ -29,6 +29,7 @@ namespace zypp
     static const RepoType RPMMD;
     static const RepoType YAST2;
     static const RepoType RPMPLAINDIR;
+    static const RepoType RUBYGEM;
     static const RepoType NONE;
 
     enum Type
@@ -37,6 +38,7 @@ namespace zypp
       RPMMD_e,
       YAST2_e,
       RPMPLAINDIR_e,
+      RUBYGEM_e
     };
 
     RepoType() : _type(NONE_e) {}

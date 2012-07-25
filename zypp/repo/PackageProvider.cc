@@ -23,6 +23,7 @@
 #include "zypp/TmpPath.h"
 #include "zypp/ZConfig.h"
 #include "zypp/RepoInfo.h"
+#include "zypp/PluginScript.h"
 
 using std::endl;
 
@@ -427,7 +428,10 @@ namespace zypp
 			     const DeltaCandidates & deltas_r,
 			     const PackageProviderPolicy & policy_r )
       : Base( access_r, package_r, deltas_r, policy_r )
-      {}
+      , _stem( stem_r )
+      {
+	DBG << "Try plugin " << stem_r << "2rpm" << endl;
+      }
 
     protected:
       virtual ManagedFile providePackageFromCache() const
@@ -437,8 +441,40 @@ namespace zypp
 
       virtual ManagedFile doProvidePackage() const
       {
-	return Base::doProvidePackage();
+	// Prepare the plugin
+	Pathname pluginpath( Pathname::assertprefix( ZConfig::instance().systemRoot(),
+						     ZConfig::instance().pluginsPath()/"generator"/(_stem+"2rpm") ) );
+	PluginScript plugin;
+	plugin.open( pluginpath );	// throws if plugin missing
+
+	// now get the file and sent it to the plugin
+	ManagedFile stemfile( Base::doProvidePackage() );
+	ManagedFile outputfile( stemfile.value().extend( ".rpm" ), filesystem::unlink ); // start temporary, fix later
+
+	PluginFrame f( "CONVERT" );
+	f.setHeader( "inputfile", stemfile.value().asString() );
+	f.setHeader( "outputfile", outputfile.value().asString() );
+	plugin.send( f );
+
+	// wait for answer....
+	PluginFrame r( plugin.receive() );
+	DBG << "******> " << r << endl;
+
+	if ( ! r.isAckCommand() )
+	  ZYPP_THROW( Exception( "NO ACK" ) );
+
+	if ( ! PathInfo( outputfile ).isExist() )
+	  ZYPP_THROW( Exception( "NO File" ) );
+
+	// rpm seems to be fine
+	if ( _package->repoInfo().keepPackages()  )
+	  outputfile.resetDispose();
+
+	return outputfile;
       }
+
+    private:
+      std::string _stem;
     };
     ///////////////////////////////////////////////////////////////////
 
@@ -452,6 +488,11 @@ namespace zypp
 								const DeltaCandidates & deltas_r,
 								const PackageProviderPolicy & policy_r )
     {
+      std::string extension( str::toLower( package_r->location().filename().extension() ) );
+      if ( extension == ".gem" )
+      {
+	return new PluginPackageProvider( extension.substr(1), access_r, package_r, deltas_r, policy_r );
+      }
       return new RpmPackageProvider( access_r, package_r, deltas_r, policy_r );
     }
 

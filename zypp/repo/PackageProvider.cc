@@ -448,12 +448,20 @@ namespace zypp
 	plugin.open( pluginpath );	// throws if plugin missing
 
 	// now get the file and sent it to the plugin
-	ManagedFile stemfile( Base::doProvidePackage() );
-	ManagedFile outputfile( stemfile.value().extend( ".rpm" ), filesystem::unlink ); // start temporary, fix later
+	// ManagedFile stemfile( Base::doProvidePackage() );
+	RepoInfo info = _package->repoInfo();
+	OnMediaLocation loc( _package->location() );
+	PathInfo cachepath( info.packagesPath() / loc.filename() );
+	ManagedFile stemfile;
+	if ( cachepath.isFile() ) // for now: && ! loc.checksum().empty() ) // accept cache hit with matching checksum only!
+	  stemfile = ManagedFile( cachepath.path() );
+	else
+	  stemfile = ManagedFile( Base::doProvidePackage() );
+	ManagedFile outputfile( stemfile->extend( ".rpm" ), filesystem::unlink ); // start temporary, fix later
 
 	PluginFrame f( "CONVERT" );
-	f.setHeader( "inputfile", stemfile.value().asString() );
-	f.setHeader( "outputfile", outputfile.value().asString() );
+	f.setHeader( "inputfile", stemfile->asString() );
+	f.setHeader( "outputfile", outputfile->asString() );
 	plugin.send( f );
 
 	// wait for answer....

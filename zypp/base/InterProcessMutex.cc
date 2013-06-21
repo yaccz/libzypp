@@ -1,348 +1,713 @@
-
-extern "C"
-{
-#include <sys/file.h>
-}
+/*---------------------------------------------------------------------\
+|                          ____ _   __ __ ___                          |
+|                         |__  / \ / / . \ . \                         |
+|                           / / \ V /|  _/  _/                         |
+|                          / /__ | | | | | |                           |
+|                         /_____||_| |_| |_|                           |
+|                                                                      |
+\---------------------------------------------------------------------*/
+/** \file	zypp/base/InterProcessMutex.cc
+ *
+*/
 #include <iostream>
-#include <fstream>
 
-#include "zypp/base/Logger.h"
+#include <boost/interprocess/sync/file_lock.hpp>
+#include <boost/interprocess/sync/sharable_lock.hpp>
+#include <boost/interprocess/sync/scoped_lock.hpp>
+
+#include "zypp/base/LogTools.h"
 #include "zypp/base/Gettext.h"
-#include "zypp/base/IOStream.h"
-#include "zypp/base/InterProcessMutex.h"
+#include "zypp/base/NonCopyable.h"
+#include "zypp/base/Functional.h"
 #include "zypp/base/String.h"
-
-#include "zypp/TmpPath.h"
 #include "zypp/Pathname.h"
-#include "zypp/PathInfo.h"
 
-#define LMIL MIL << "LOCK [" << _options.name << "] "
+#include "zypp/base/InterProcessMutex.h"
 
-using namespace std;
 
+#undef ZYPP_BASE_LOGGER_LOGGROUP
+#define ZYPP_BASE_LOGGER_LOGGROUP "zypp::MTX"
+
+#if ( 0 )
+#define TAG DBG << __PRETTY_FUNCTION__ << endl;
+#else
+#define TAG
+#endif
+
+///////////////////////////////////////////////////////////////////
 namespace zypp
 {
-namespace base
-{
-
-ZYppLockedException::ZYppLockedException( const std::string & msg_r,
-                                          const std::string &name,
-                                          pid_t locker_pid )
-    : Exception(msg_r)
-    , _locker_pid (locker_pid)
-    , _name(name)
-{}
-
-ZYppLockedException::~ZYppLockedException() throw()
-{}
- 
-
-InterProcessMutex::Options::Options( ConsumerType ptype,
-                                     const std::string &pname,
-                                     int ptimeout )
-    : name(pname) 
-    , timeout(ptimeout)
-    , type(ptype)
-{
-    if ( geteuid() == 0 )
-        base = "/var/run";
-    else
-        base = filesystem::TmpPath::defaultLocation() + ( string("zypp-") + getenv("USER") );
-}
-    
-
-   
-InterProcessMutex::InterProcessMutex( const Options &poptions )
-    : _options(poptions)
-{
-    // get the current pid
-    pid_t curr_pid = getpid();
-    Pathname lock_file = lockFilePath();
-    int totalslept = 0;
-    int k = 0;
-    
-    while (1)
+  ///////////////////////////////////////////////////////////////////
+  namespace base
+  {
+    namespace env
     {
-        k++;
-        
-        // try to create the lock file atomically, this will fail if
-        // the lock exists
-	try {
-	  _fd.reset( new Fd( lock_file, O_RDWR | O_CREAT | O_EXCL, 0666) );
-	} catch (...) {
-	  _fd.reset();
-	}
-        if ( !_fd || !_fd->isOpen() )
-        {
-            struct flock lock;
-            
-            // the file exists, lets see if someone has it locked exclusively
-            _fd.reset( new Fd( lock_file, O_RDWR ) );
-            if ( !_fd->isOpen() )
-            {
-                ZYPP_THROW(Exception(str::form(_("Can't open lock file: %s"), strerror(errno))));
-            }
-            
-            memset(&lock, 0, sizeof(struct flock));
-            lock.l_whence = SEEK_SET;
-
-            // GETLK tells you the conflicting lock as if the lock you pass
-            // would have been set. So set the lock type depending on whether
-            // we are a writer or a reader.
-            lock.l_type = ( ( _options.type == Writer ) ? F_WRLCK : F_RDLCK );
-            
-
-            // get lock information
-            if (fcntl(_fd->fd(), F_GETLK, &lock) < 0)
-            {
-                ZYPP_THROW(Exception(string("Error getting lock info: ") +  strerror(errno)));
-            }
-
-            
-            MIL << lock_file << " : ";
-            switch ( lock.l_type )
-            {
-                case F_WRLCK:
-                    MIL << " Write-Lock conflicts" << endl;
-                    break;
-                case F_RDLCK:
-                    MIL << " Read-Lock conflicts" << endl;                    
-                    break;
-                case F_UNLCK:
-                    MIL << " No lock conflicts" << endl;
-                    break;
-                default:
-                    break;
-                    
-            }
-            
-            // F_GETLK is confusing
-            // http://groups.google.com/group/comp.unix.solaris/tree/browse_frm/month/2005-09/123fae2c774bceed?rnum=61&_done=%2Fgroup%2Fcomp.unix.solaris%2Fbrowse_frm%2Fmonth%2F2005-09%3F
-            // new table of access
-            // F_WRLCK   Reader  Wait or abort
-            // F_WRLCK   Writer  Wait or abort
-            // F_RDLCK   Writer  Wait or abort
-            // F_RDLCK   Reader  Can't happen, anyway, wait or abort            
-            // F_UNLCK   Reader  Take reader lock
-            // F_UNLCK   Writer  Take writer lock
-            
-            
-
-            // wait or abort
-            if (  lock.l_type != F_UNLCK )
-            {
-                // some lock conflicts with us.
-                LMIL << "pid " << lock.l_pid << " is running and has a lock that conflicts with us." << std::endl;
-                
-                // abort if we have slept more or equal than the timeout, but
-                // not for the case where timeout is negative which means no
-                // timeout and therefore we never abort.
-                if ( (totalslept >= _options.timeout) && (_options.timeout >= 0 ) )
-                {
-                    ZYPP_THROW(ZYppLockedException(                                       
-                                   _("This action is being run by another program already."),
-                                   _options.name, lock.l_pid));
-                }
-                        
-                // if not, let sleep one second and count it
-                LMIL << "waiting 1 second..." << endl;
-                sleep(1);
-                ++totalslept;
-                continue;
-            }
-            else if ( ( lock.l_type == F_UNLCK ) && ( _options.type == Reader ) )
-            {
-                // either there is no lock or a reader has it so we just
-                // acquire a reader lock.
-
-                // try to get more lock info
-                lock.l_type = F_WRLCK;
- 
-                if (fcntl(_fd->fd(), F_GETLK, &lock) < 0)
-                {
-                    ZYPP_THROW(Exception(string("Error getting lock info: ") +  strerror(errno)));
-                }
-                
-                if ( lock.l_type == F_UNLCK )
-                {
-                    LMIL << "no previous readers, unlinking lock file and retrying." << endl;
-                    
-                    // actually there are no readers
-                    // lets delete it and break, so the next loop will
-                    // probably succeed in creating it. The worst thing that can
-                    // happen is that another process will take it first, but
-                    // we are not aiming at such level of correctness. Otherwise
-                    // the code path will complicate too much.
-                    memset(&lock, 0, sizeof(struct flock));
-                    lock.l_type = F_WRLCK;
-                    lock.l_whence = SEEK_SET;
-                    lock.l_pid = getpid();
-
-                    if (fcntl(_fd->fd(), F_SETLK, &lock) < 0)
-                    {
-                        ZYPP_THROW (Exception( "Can't lock file to unlink it."));
-                    }
-                    filesystem::unlink(lock_file.c_str());
-                    continue;
-                }
-                else if ( lock.l_type == F_RDLCK )
-                {
-                    // there is another reader.
-                    LMIL << "previous readers on lock file. taking lock as a reader." << std::endl;
-                    memset(&lock, 0, sizeof(struct flock));
-                    lock.l_type = F_RDLCK;
-                    lock.l_whence = SEEK_SET;
-                    lock.l_pid = getpid();
-
-                    if (fcntl(_fd->fd(), F_SETLK, &lock) < 0)
-                    {
-                        ZYPP_THROW (Exception( "Can't lock file for reader"));
-                    }
-                    // and keep the lock open.
-                    break;
-                }
-                else
-                {
-                    // cant happen!
-                    ERR << "impossible condition" << endl;
-                    
-                    break;
-                }
-            }
-            else if ( ( lock.l_type == F_UNLCK ) && ( _options.type == Writer ) )
-            {
-                LMIL << "stale lock found" << endl;
-                // Nobody conflicts with a writer lock so nobody is actually
-                // locking.
-                // lets delete it and break, so the next loop will
-                // probably succeed in creating it. The worst thing that can
-                // happen is that another process will take it first, but
-                // we are not aiming at such level of correctness. Otherwise
-                // the code path will complicate too much.
-                memset(&lock, 0, sizeof(struct flock));
-                lock.l_type = F_WRLCK;
-                lock.l_whence = SEEK_SET;
-                lock.l_pid = getpid();
-
-                if (fcntl(_fd->fd(), F_SETLK, &lock) < 0)
-                {
-                    ZYPP_THROW (Exception( "Can't lock file to unlink it."));
-                }
-                filesystem::unlink(lock_file.c_str());
-                continue;
-            } 
-            else 
-            {
-                // undefined case, just get out of the loop
-                LMIL << "undefined case!" << endl;
-                
-                break;
-            }
-            
-        }
-        else 
-        {
-            // exclusive file creation succeeded. So may be we are the
-            // first writer or first reader
-            
-            // try to lock it exclusively
-            // if it fails, someone won us, so we just go for another try
-            // or just abort
-            LMIL << "no lock found, taking ownership of it as a " << ( (_options.type == Reader ) ? "reader" : "writer" ) << endl;
-            struct flock lock;
-            memset(&lock, 0, sizeof(struct flock));
-            lock.l_whence = SEEK_SET;
-            lock.l_type = F_WRLCK;
-            lock.l_pid = getpid();
-
-            if (fcntl(_fd->fd(), F_SETLK, &lock) < 0)
-                ZYPP_THROW (Exception( "Can't lock file to write pid."));
-            
-            char buffer[100];
-            sprintf( buffer, "%d\n", curr_pid);
-            write( _fd->fd(), buffer, strlen(buffer));
-            
-            // by now the pid is written and the file locked.
-            // If we are a reader, just downgrade the lock to
-            // read shared lock.
-            if ( _options.type == Reader )
-            {
-                lock.l_type = F_RDLCK;
-               
-                if (fcntl(_fd->fd(), F_SETLK, &lock) < 0)
-                    ZYPP_THROW (Exception( "Can't set lock file to shared"));
-            }
-            
-            break;
-        }           
-    } // end loop       
-
-    LMIL << "Lock intialized" << endl;
-    
-}
-
-InterProcessMutex::~InterProcessMutex()
-{
-    try
-    {
-        Pathname lock_file = lockFilePath();
-        LMIL << "dropping " 
-             << ( (_options.type == Reader ) ? "reader" : "writer" ) 
-             << " lock on " << lock_file << endl;
-        
-        switch ( _options.type )
-        {
-            case Reader:
-                
-                break;
-                
-            case Writer:
-                // we are the only writer, so unlink the file
-                filesystem::unlink(lock_file.c_str());
-                break;
-                
-        }
-        // and finally close the file and release the lock
-        // (happens automatically)
+      /**  */
+      inline unsigned ZYPP_MAX_LOCK_WAIT( unsigned default_r = 0U )
+      {
+	const char * env = getenv("ZYPP_MAX_LOCK_WAIT");
+	if ( env )
+	  return str::strtonum<unsigned>( env );
+	return default_r;
+      }
     }
-    catch(...) {} // let no exception escape.
-}
 
-
-Pathname InterProcessMutex::lockFilePath() const
-{
-    filesystem::assert_dir(_options.base);
-    return _options.base + ("zypp-" + _options.name + ".lock");
-}    
-
-bool InterProcessMutex::isProcessRunning(pid_t pid_r)
-{
-    // it is another program, not me, see if it is still running
-    Pathname procdir( Pathname("/proc") / str::numstring(pid_r) );
-
-    PathInfo status( procdir/"status" );
-    XXX << "Checking " <<  status << endl;
-    bool still_running = status.isExist();
-
-    if ( still_running )
+    ///////////////////////////////////////////////////////////////////
+    namespace
     {
-        Pathname p( procdir/"exe" );
-        XXX << p << " -> " << filesystem::readlink( p ) << endl;
+      ///////////////////////////////////////////////////////////////////
+      /// \class PhoenixMap<PhoenixKeyType, PhoenixValueType>
+      /// \brief Map of phoenix-singletons
+      ///
+      /// A weak_ptr to the created PhoenixValue is stored in the _phoenixMap,
+      /// this way subsequent requests for the same PhoenixKey can reuse the
+      /// PhoenixValue if it is still in scope. Otherwise the PhoenixValue
+      /// is re-created.
+      ///
+      /// \note PhoenixValueType must be constructible from PhoenixKeyType.
+      ///////////////////////////////////////////////////////////////////
+      template <class PhoenixKeyType, class PhoenixValueType>
+      class PhoenixMap : private base::NonCopyable
+      {
+      public:
+	shared_ptr<PhoenixValueType> get( const PhoenixKeyType & key_r )
+	{
+	  shared_ptr<PhoenixValueType> ret( _phoenixMap[key_r].lock() ); // weak_ptr lock ;)
+	  if ( ! ret )
+	  {
+	    DBG << "New Phoenix " << key_r << endl;
+	    ret.reset( new PhoenixValueType( key_r ) );
+	    _phoenixMap[key_r] = ret;
+	  }
+	  else
+	  {
+	    DBG << "Reuse Phoenix " << key_r << endl;
+	  }
+	  return ret;
 
-        p = procdir/"cmdline";
-        XXX << p << ": ";
-        std::ifstream infile( p.c_str() );
-        for( iostr::EachLine in( infile ); in; in.next() )
-        {
-          XXX << *in << endl;
-        }
+	}
+      private:
+	std::map<PhoenixKeyType, weak_ptr<PhoenixValueType> > _phoenixMap;
+      };
+      ///////////////////////////////////////////////////////////////////
+
+      /** \relates InterProcessMutex */
+      typedef PhoenixMap<Pathname, InterProcessMutex::Impl> PhoenixMapType;
+
+      /** \relates InterProcessMutex PhoenixMap of active InterProcessMutexes. */
+      inline PhoenixMapType & phoenixMap()
+      {
+	static PhoenixMapType _phoenixMap;
+	return _phoenixMap;
+      }
+    } // namespace
+    ///////////////////////////////////////////////////////////////////
+
+    std::ostream & operator<<( std::ostream & str, const InterProcessMutex::Impl & obj );
+
+    ///////////////////////////////////////////////////////////////////
+    /// \class InterProcessMutex::Impl
+    /// \brief \ref InterProcessMutex implementation
+    ///////////////////////////////////////////////////////////////////
+    class InterProcessMutex::Impl : private base::NonCopyable
+    {
+      sec_type initialLockWait()
+      { return 3U; }
+
+      sec_type maxLockWait()
+      { static sec_type _val = env::ZYPP_MAX_LOCK_WAIT( 180U ); return _val; }
+
+    public:
+      /** Underlying boost::interprocess::mutex */
+      typedef boost::interprocess::file_lock LockType;
+
+    public:
+      Impl( FakeLockType )
+      : _mutexFile( InterProcessMutex::fakeLockPath() )
+      , _state( UNLOCKED )
+      {}
+
+      Impl( const Pathname & path_r )
+      : _mutexFile( path_r )
+      , _mutex( new LockType( path_r.c_str() ) )
+      , _state( UNLOCKED )
+      {}
+
+      ~Impl()
+      { DBG << "Burn Phoenix " << _mutexFile << endl; }
+
+    public:
+      State state() const
+      { return _state; }
+
+      Pathname mutexFile() const
+      { return _mutexFile; }
+
+    public:
+      void lock()
+      {
+	if ( ! timedLock( wait( initialLockWait() ) ) )
+	{
+	  if ( _state != UNLOCKED )
+	  {
+	    MIL << "Drop " << SHARED_LOCK << " lock to avoid deadlock;" << *this << endl;
+	    unlock();
+	  }
+
+	  callback::SendReport<InterProcessLockReport> report;
+	  sec_type total   = 0;
+	  sec_type next    = initialLockWait();
+	  sec_type timeout = maxLockWait();
+	  WAR << "No " << EXCLUSIVE_LOCK << " lock within " << next << "/" << timeout << "; wait " << next << "; " << *this << endl;
+	  do {
+	    total += next;
+	    if ( timeout && total >= timeout )
+	    {
+	      ERR << "No " << EXCLUSIVE_LOCK << " lock within " << total << "/" << timeout << "; Give up. " << *this << endl;
+	      throw InterProcessLockTimeoutException( _mutexFile, EXCLUSIVE_LOCK, total, timeout );
+	    }
+	    if ( ! report->waitForLock( _mutexFile, EXCLUSIVE_LOCK, total, next, timeout ) )
+	    {
+	      ERR << "No " << EXCLUSIVE_LOCK << " lock within " << total << "/" << timeout << "; Give up requested. " << *this << endl;
+	      throw InterProcessLockAbortException( _mutexFile, EXCLUSIVE_LOCK, total, timeout );
+	    }
+	  } while( ! timedLock( wait( next ) ) );
+	  MIL << "Got " << EXCLUSIVE_LOCK << " lock after " << total+next << "/" << timeout << ";" << *this << endl;
+	}
+      }
+
+      void sleepLock()
+      { if ( _state != EXCLUSIVE_LOCK )		{ if ( _mutex ) _mutex->lock(); _state = EXCLUSIVE_LOCK; } }
+
+      bool tryLock()
+      {
+	if ( _state == EXCLUSIVE_LOCK )		return true;
+        if ( !_mutex || _mutex->try_lock() )	{ _state = EXCLUSIVE_LOCK; return true; }
+        return false;
+      }
+
+      bool timedLock( const boost::posix_time::ptime & absTime_r )
+      {
+	if ( _state == EXCLUSIVE_LOCK )		return true;
+	if ( !_mutex || _mutex->timed_lock( absTime_r ) ) { _state = EXCLUSIVE_LOCK; return true; }
+	return false;
+      }
+
+      void unlock()	// not bound to EXCLUSIVE_LOCK
+      {  if ( _state != UNLOCKED ) 		{ if ( _mutex ) _mutex->unlock(); _state = UNLOCKED; } }
+
+    public:
+      void lockSharable()
+      {
+	if ( ! timedLockSharable( wait( initialLockWait() ) ) )
+	{
+	  callback::SendReport<InterProcessLockReport> report;
+	  sec_type total   = 0;
+	  sec_type next    = initialLockWait();
+	  sec_type timeout = maxLockWait();
+	  WAR << "No " << SHARED_LOCK << " lock within " << next << "/" << timeout << "; wait " << next << "; " << *this << endl;
+	  do {
+	    total += next;
+	    if ( timeout && total >= timeout )
+	    {
+	      ERR << "No " << SHARED_LOCK << " lock within " << total << "/" << timeout << "; Give up. " << *this << endl;
+	      throw InterProcessLockTimeoutException( _mutexFile, SHARED_LOCK, total, timeout );
+	    }
+	    if ( ! report->waitForLock( _mutexFile, SHARED_LOCK, total, next, timeout ) )
+	    {
+	      ERR << "No " << SHARED_LOCK << " lock within " << total << "/" << timeout << "; Give up requested. " << *this << endl;
+	      throw InterProcessLockAbortException( _mutexFile, SHARED_LOCK, total, timeout );
+	    }
+	  } while( ! timedLockSharable( wait( next ) ) );
+	  MIL << "Got " << SHARED_LOCK << " lock after " << total+next << "/" << timeout << ";" << *this << endl;
+	}
+      }
+
+      void sleepLockSharable()
+      { if ( _state != SHARED_LOCK )		{ if ( _mutex ) _mutex->lock_sharable(); _state = SHARED_LOCK; } }
+
+      bool tryLockSharable()
+      {
+	if ( _state == SHARED_LOCK )		return true;
+	if ( !_mutex || _mutex->try_lock_sharable() ) { _state = SHARED_LOCK; return true; }
+	return false;
+      }
+
+      bool timedLockSharable( const boost::posix_time::ptime & absTime_r )
+      {
+	if ( _state == SHARED_LOCK )		return true;
+	if ( !_mutex || _mutex->timed_lock_sharable( absTime_r ) ) { _state = SHARED_LOCK; return true; }
+	return false;
+      }
+
+      void unlockSharable()	// not bound to SHARED_LOCK
+      {  if ( _state != UNLOCKED )		{ if ( _mutex ) _mutex->unlock_sharable(); _state = UNLOCKED; } }
+
+    public:
+      /** Shared_ptr with cusom deleter used as reference to a lockstate.
+       * \see \ref getRef
+       */
+      typedef shared_ptr<void> LockStateRef;
+
+      /** Aquire a reference to a lockstate.
+       * \see \ref unref
+       */
+      LockStateRef getRef( State state_r )
+      {
+	if ( state_r == UNLOCKED )	// NOOP
+	  return shared_ptr<void>( (void*)0 );
+
+	weak_ptr<void>& lockRef( state_r == EXCLUSIVE_LOCK ? _scopedRefs : _sharedRefs );
+	shared_ptr<void> ret( lockRef.lock() ); // weak_ptr lock ;)
+	if ( ! ret )
+	{
+	  lockRef = ret = shared_ptr<void>( (void*)state_r, bind( mem_fun_ref( &Impl::unref ), ref(*this), _1 ) );
+	  dumpOn( MIL << "+++ " << state_r << " " ) << endl;
+	}
+	else
+	  dumpOn( DBG << "+++ " << state_r << " " ) << endl;
+	return ret;
+      }
+
+    private:
+      /** Custom deleter for lockstate references.
+       * \see \ref getRef
+       */
+      void unref( void * p )
+      {
+	// * If the actual mutex state does not match the droped
+	// lockstate reference we simply do nothing.Either we are
+	// superseeded buy a higher lockstate, or someone manually
+	// fiddled with the mutex.
+	// * Note that this is a shared_pointers custom deleter,
+	// so the coresponding lockRef is expired. No need to test.
+	State expiredState = State(long(p)); // due to the way it was created in getRef()
+	if ( expiredState == _state )
+	{
+	  switch ( _state )
+	  {
+	    case EXCLUSIVE_LOCK:
+	      // Here: _scopedRefs.expired()
+	      if ( _sharedRefs.expired() )
+		unlock();
+	      else
+		lockSharable();
+	      break;
+	    case SHARED_LOCK:
+	      // Here: _sharedRefs.expired()
+	      if ( !_scopedRefs.expired() )
+		INT << "Unexpected mutex state: have scopedRefs but in SHARED_LOCK state!" << endl;
+	      unlockSharable();
+	      break;
+	    case UNLOCKED:
+	      INT << "Unexpected mutex state: had refs but in UNLOCKED state" << endl;
+	      break;
+	  }
+	  dumpOn( MIL << "--- " << expiredState << " " ) << endl;
+	}
+	else
+	  dumpOn( DBG << "--- " << expiredState << " " ) << endl;
      }
 
-     return still_running;
-}
+    private:
+      const Pathname	_mutexFile;	///< only for log and debug
+      scoped_ptr<LockType> _mutex;
+      State		_state;
+      weak_ptr<void>	_sharedRefs;	///< references held by \ref SharableLock
+      weak_ptr<void>	_scopedRefs;	///< references held by \ref ScopedLock
+
+    public:
+      /** Stream output */
+      std::ostream & dumpOn( std::ostream & str ) const
+      {
+	return str << "[" << _state
+		   << "(" << _sharedRefs.use_count()
+		   << "," << _scopedRefs.use_count()
+		   << ")" << _mutexFile
+		   << "]";
+      }
+    };
+    ///////////////////////////////////////////////////////////////////
+
+    /** \relates InterProcessMutex::Impl Stream output */
+    inline std::ostream & operator<<( std::ostream & str, const InterProcessMutex::Impl & obj )
+    { return obj.dumpOn( str ); }
+
+    ///////////////////////////////////////////////////////////////////
+    // class InterProcessMutex
+    ///////////////////////////////////////////////////////////////////
+
+    Pathname InterProcessMutex::fakeLockPath()
+    { static const Pathname _p( "/<fakelock>" ); return _p; }
 
 
-}
-}
+    InterProcessMutex::InterProcessMutex()
+    {}
+
+    InterProcessMutex::InterProcessMutex( FakeLockType flag_r )
+    : _pimpl( new Impl( flag_r ) )
+    {}
+
+    InterProcessMutex::InterProcessMutex( const Pathname & path_r )
+    : _pimpl( path_r != fakeLockPath() ? phoenixMap().get( path_r )
+					 : shared_ptr<Impl>( new Impl( fakeLock ) ) )
+    {}
 
 
+    InterProcessMutex::State InterProcessMutex::state() const
+    { return _pimpl->state(); }
+
+    Pathname InterProcessMutex::mutexFile() const
+    { return _pimpl->mutexFile(); }
+
+
+    void InterProcessMutex::lock()
+    { TAG; return _pimpl->lock(); }
+
+    void InterProcessMutex::sleepLock()
+    { TAG; return _pimpl->sleepLock(); }
+
+    bool InterProcessMutex::tryLock()
+    { TAG; return _pimpl->tryLock(); }
+
+    bool InterProcessMutex::timedLock( const boost::posix_time::ptime & absTime_r )
+    { TAG; return _pimpl->timedLock( absTime_r ); }
+
+    void InterProcessMutex::unlock()
+    { TAG; return _pimpl->unlock(); }
+
+
+    void InterProcessMutex::lockSharable()
+    { TAG; return _pimpl->lockSharable(); }
+
+    void InterProcessMutex::sleepLockSharable()
+    { TAG; return _pimpl->sleepLockSharable(); }
+
+    bool InterProcessMutex::tryLockSharable()
+    { TAG; return _pimpl->tryLockSharable(); }
+
+    bool InterProcessMutex::timedLockSharable( const boost::posix_time::ptime & absTime_r )
+    { TAG; return _pimpl->timedLockSharable( absTime_r ); }
+
+    void InterProcessMutex::unlockSharable()
+    { TAG; return _pimpl->unlockSharable(); }
+
+
+    std::ostream & operator<<( std::ostream & str, const InterProcessMutex & obj )
+    {
+      if ( obj._pimpl )
+	return obj._pimpl->dumpOn( str );
+      return str << "[NO MUTEX]";
+    }
+
+    ///////////////////////////////////////////////////////////////////
+    // enum InterProcessMutex::State
+    ///////////////////////////////////////////////////////////////////
+
+    std::string asString( const InterProcessMutex::State obj )
+    {
+      switch ( obj )
+      {
+	case InterProcessMutex::UNLOCKED:	return "-nl-";	break;
+	case InterProcessMutex::SHARED_LOCK:	return "shar";	break;
+	case InterProcessMutex::EXCLUSIVE_LOCK:	return "EXCL";	break;
+      }
+      INT << "InterProcessMutex::State(?)" << endl;
+      return "InterProcessMutex::State(?)";
+    }
+
+    ///////////////////////////////////////////////////////////////////
+    namespace
+    {
+      ///////////////////////////////////////////////////////////////////
+      /// \class lock_exception
+      /// \brief Thrown by LockImplBase if the mutex is not usable.
+      class lock_exception : public boost::interprocess::lock_exception
+      {
+      public:
+	lock_exception()
+	:  boost::interprocess::lock_exception()
+	{}
+
+	virtual const char* what() const throw()
+	{ return "boost::interprocess::lock_exception: no mutex";  }
+      };
+      ///////////////////////////////////////////////////////////////////
+
+      ///////////////////////////////////////////////////////////////////
+      /// \class LockImplTraits<InterProcessMutex::State>
+      /// \brief Traits class selecting shared/exclusive InterProcessMutex calls.
+      ///////////////////////////////////////////////////////////////////
+      template<InterProcessMutex::State _targetState>
+      struct LockImplTraits
+      {
+	typedef void (InterProcessMutex::*LockFnc)();
+	typedef void (InterProcessMutex::*SleepLockFnc)();
+	typedef bool (InterProcessMutex::*TryLockFnc)();
+	typedef bool (InterProcessMutex::*TimedLockFnc)( const boost::posix_time::ptime & absTime_r );
+
+	static const LockFnc		lock;
+	static const SleepLockFnc	sleepLock;
+	static const TryLockFnc		tryLock;
+	static const TimedLockFnc	timedLock;
+      };
+
+      /** NoOp for UNLOCKED state */
+      template<>
+      struct LockImplTraits<InterProcessMutex::UNLOCKED>
+      {};
+
+      template<>
+      const LockImplTraits<InterProcessMutex::SHARED_LOCK>::LockFnc
+	    LockImplTraits<InterProcessMutex::SHARED_LOCK>::lock	= &InterProcessMutex::lockSharable;
+      template<>
+      const LockImplTraits<InterProcessMutex::SHARED_LOCK>::SleepLockFnc
+	    LockImplTraits<InterProcessMutex::SHARED_LOCK>::sleepLock	= &InterProcessMutex::sleepLockSharable;
+      template<>
+      const LockImplTraits<InterProcessMutex::SHARED_LOCK>::TryLockFnc
+	    LockImplTraits<InterProcessMutex::SHARED_LOCK>::tryLock	= &InterProcessMutex::tryLockSharable;
+      template<>
+      const LockImplTraits<InterProcessMutex::SHARED_LOCK>::TimedLockFnc
+	    LockImplTraits<InterProcessMutex::SHARED_LOCK>::timedLock	= &InterProcessMutex::timedLockSharable;
+
+      template<>
+      const LockImplTraits<InterProcessMutex::EXCLUSIVE_LOCK>::LockFnc
+	    LockImplTraits<InterProcessMutex::EXCLUSIVE_LOCK>::lock	= &InterProcessMutex::lock;
+      template<>
+      const LockImplTraits<InterProcessMutex::EXCLUSIVE_LOCK>::SleepLockFnc
+	    LockImplTraits<InterProcessMutex::EXCLUSIVE_LOCK>::sleepLock= &InterProcessMutex::sleepLock;
+      template<>
+      const LockImplTraits<InterProcessMutex::EXCLUSIVE_LOCK>::TryLockFnc
+	    LockImplTraits<InterProcessMutex::EXCLUSIVE_LOCK>::tryLock	= &InterProcessMutex::tryLock;
+      template<>
+      const LockImplTraits<InterProcessMutex::EXCLUSIVE_LOCK>::TimedLockFnc
+	    LockImplTraits<InterProcessMutex::EXCLUSIVE_LOCK>::timedLock= &InterProcessMutex::timedLock;
+
+    } // namespace
+    ///////////////////////////////////////////////////////////////////
+
+    ///////////////////////////////////////////////////////////////////
+    /// \class InterProcessMutex::Lock<InterProcessMutex::State>::Impl
+    /// \brief \ref InterProcessMutex::Lock<InterProcessMutex::State> implementation
+    ///////////////////////////////////////////////////////////////////
+    template<InterProcessMutex::State _targetState>
+    class InterProcessMutex::Lock<_targetState>::Impl : private base::NonCopyable
+    {
+      typedef LockImplTraits<_targetState>		Traits;
+      typedef InterProcessMutex::Impl::LockStateRef	LockStateRef;
+    public:
+      Impl()
+      {}
+
+      explicit Impl( InterProcessMutex mutex_r )
+      : _mutex( mutex_r )
+      { lock(); }
+
+      Impl( InterProcessMutex mutex_r, InterProcessMutex::DeferLockType )
+      : _mutex( mutex_r )
+      {}
+
+      Impl( InterProcessMutex mutex_r, InterProcessMutex::TryToLockType )
+      : _mutex( mutex_r )
+      { tryLock(); }
+
+      Impl( InterProcessMutex mutex_r, const boost::posix_time::ptime & absTime_r )
+      : _mutex( mutex_r )
+      { timedLock( absTime_r ); }
+
+    public:
+      void lock()
+      {
+	assertMutex();
+	if ( needStateChange() )
+	{
+	  (_mutex.*Traits::lock)();
+	}
+	getRef();
+      }
+
+      void sleepLock()
+      {
+	assertMutex();
+	if ( needStateChange() )
+	{
+	  (_mutex.*Traits::sleepLock)();
+	}
+	getRef();
+      }
+
+      bool tryLock()
+      {
+	assertMutex();
+	if ( needStateChange() && !(_mutex.*Traits::tryLock)() )
+	{
+	  unref();
+	  return false;
+	}
+	getRef();
+	return true;
+      }
+
+      bool timedLock( const boost::posix_time::ptime & absTime_r )
+      {
+	assertMutex();
+	if ( needStateChange() && !(_mutex.*Traits::timedLock)( absTime_r ) )
+	{
+	  unref();
+	  return false;
+	}
+	getRef();
+	return true;
+      }
+
+      void unlock()
+      {
+	assertMutex();
+	unref();
+      }
+
+    public:
+      bool owns() const
+      { return _mutexRef; }
+
+      InterProcessMutex mutex() const
+      { return _mutex; }
+
+      /** Stream output */
+      std::ostream & dumpOn( std::ostream & str ) const
+      {
+	return str << "[" << ( owns() ? _targetState : InterProcessMutex::UNLOCKED ) << _mutex << "]";
+      }
+
+    private:
+      void assertMutex() const
+      { if ( !_mutex ) throw lock_exception(); }
+
+      /** Whether we actually need to obtain a lock. */
+      bool needStateChange() const
+      { return _mutex.state() < _targetState; }
+
+    private:
+      void getRef()
+      { if ( !_mutexRef ) _mutexRef = _mutex.backdoor().getRef( _targetState ); }
+
+      void unref()
+      { _mutexRef.reset(); }
+
+    private:
+      InterProcessMutex	_mutex;		///< reference to the mutex itself
+      LockStateRef	_mutexRef;	///< reference if we hold a lock
+    };
+    ///////////////////////////////////////////////////////////////////
+
+    ///////////////////////////////////////////////////////////////////
+    // class InterProcessMutex::Lock
+    ///////////////////////////////////////////////////////////////////
+
+    template<InterProcessMutex::State _targetState>
+    InterProcessMutex::Lock<_targetState>::Lock()
+    {}
+
+    template<InterProcessMutex::State _targetState>
+    InterProcessMutex::Lock<_targetState>::Lock( InterProcessMutex mutex_r )
+    : _pimpl( new Impl( mutex_r ) )
+    {}
+
+    template<InterProcessMutex::State _targetState>
+    InterProcessMutex::Lock<_targetState>::Lock( InterProcessMutex mutex_r, DeferLockType flag_r )
+    : _pimpl( new Impl( mutex_r, flag_r ) )
+    {}
+
+    template<InterProcessMutex::State _targetState>
+    InterProcessMutex::Lock<_targetState>::Lock( InterProcessMutex mutex_r, TryToLockType flag_r )
+    : _pimpl( new Impl( mutex_r, flag_r ) )
+    {}
+
+    template<InterProcessMutex::State _targetState>
+    InterProcessMutex::Lock<_targetState>::Lock( InterProcessMutex mutex_r, const boost::posix_time::ptime & absTime_r )
+    : _pimpl( new Impl( mutex_r, absTime_r ) )
+    {}
+
+
+    template<InterProcessMutex::State _targetState>
+    void InterProcessMutex::Lock<_targetState>::lock()
+    { return _pimpl->lock(); }
+
+    template<InterProcessMutex::State _targetState>
+    void InterProcessMutex::Lock<_targetState>::sleepLock()
+    { return _pimpl->sleepLock(); }
+
+    template<InterProcessMutex::State _targetState>
+    bool InterProcessMutex::Lock<_targetState>::tryLock()
+    { return _pimpl->tryLock(); }
+
+    template<InterProcessMutex::State _targetState>
+    bool InterProcessMutex::Lock<_targetState>::timedLock( const boost::posix_time::ptime & absTime_r )
+    { return _pimpl->timedLock( absTime_r ); }
+
+    template<InterProcessMutex::State _targetState>
+    void InterProcessMutex::Lock<_targetState>::unlock()
+    { return _pimpl->unlock(); }
+
+
+    template<InterProcessMutex::State _targetState>
+    bool InterProcessMutex::Lock<_targetState>::owns() const
+    { return _pimpl && _pimpl->owns(); }
+
+    template<InterProcessMutex::State _targetState>
+    InterProcessMutex InterProcessMutex::Lock<_targetState>::mutex() const
+    { return _pimpl ? _pimpl->mutex() : InterProcessMutex(); }
+
+    template<InterProcessMutex::State _targetState>
+    std::ostream & InterProcessMutex::Lock<_targetState>::dumpOn( std::ostream & str ) const
+    {
+      if ( _pimpl )
+	return _pimpl->dumpOn( str );
+      return str << "[NO LOCK]";
+    }
+
+    ///////////////////////////////////////////////////////////////////
+    // class InterProcessMutexLockException
+    ///////////////////////////////////////////////////////////////////
+    namespace
+    {
+      std::string messageInterProcessLockException( const Pathname & mutexFile_r,
+						    InterProcessMutex::State targetState_r,
+						    InterProcessLockException::sec_type total_r,
+						    InterProcessLockException::sec_type timeout_r )
+      {
+	// translators: will finally look like: "...lock on file <filename>: <reason>"
+	std::string f( targetState_r == InterProcessMutex::SHARED_LOCK
+		       ? _("Unable to obtain a shared lock on file %s")
+		       : _("Unable to obtain an exclusive lock on file %s") );
+	f += ": ";
+	f += timeout_r == 0 || total_r < timeout_r
+	     ? _("Aborted after %u seconds.")
+	     : _("Timeout after %u seconds.");
+
+	return str::form( f.c_str(), mutexFile_r.c_str(), total_r );
+      }
+    }
+
+    InterProcessLockException::InterProcessLockException( const Pathname & mutexFile_r,
+							  InterProcessMutex::State targetState_r,
+							  sec_type total_r,
+							  sec_type timeout_r )
+    : Exception( messageInterProcessLockException( mutexFile_r, targetState_r, total_r, timeout_r ) )
+    , _mutexFile( mutexFile_r )
+    , _targetState( targetState_r )
+    , _total( total_r )
+    , _timeout( timeout_r )
+    {}
+
+    ///////////////////////////////////////////////////////////////////
+    // Explicit instantiations:
+    ///////////////////////////////////////////////////////////////////
+
+    template class InterProcessMutex::Lock<InterProcessMutex::SHARED_LOCK>;
+    template class InterProcessMutex::Lock<InterProcessMutex::EXCLUSIVE_LOCK>;
+
+  } // namespace base
+  ///////////////////////////////////////////////////////////////////
+} // namespace zypp
+///////////////////////////////////////////////////////////////////

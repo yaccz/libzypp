@@ -1,59 +1,84 @@
 #include "Tools.h"
-#include <zypp/ResObjects.h>
+#include <sys/wait.h>
 
-#include <zypp/sat/LookupAttr.h>
-#include <zypp/PoolQuery.h>
-#include <zypp/sat/AttrMatcher.h>
+#include <zypp/IPMutex.h>
 
-static const Pathname sysRoot( "/tmp/ToolScanRepos" );
+#include <boost/interprocess/sync/file_lock.hpp>
+#include <boost/interprocess/sync/sharable_lock.hpp>
+#include <boost/interprocess/sync/scoped_lock.hpp>
 
-void addInstall( const std::string & pkgspec_r )
+int lockStatus()
 {
-  bool rewrote( false );
-  Capability pkgspec( Capability::guessPackageSpec( pkgspec_r, rewrote ) );
-  MIL << "Add '" << pkgspec << "' for '" << pkgspec_r << "'" << endl;
-  ResPool::instance().resolver().addRequire( pkgspec );
-}
-
-void addConflict( const std::string & pkgspec_r )
-{
-  bool rewrote( false );
-  Capability pkgspec( Capability::guessPackageSpec( pkgspec_r, rewrote ) );
-  MIL << "Con '" << pkgspec << "' for '" << pkgspec_r << "'" << endl;
-  ResPool::instance().resolver().addConflict( pkgspec );
-}
-
-bool solve()
-{
-  bool rres = false;
+  int pid = fork();
+  if ( pid < 0 )
   {
-    //zypp::base::LogControl::TmpLineWriter shutUp;
-    //ResPool::instance().resolver().setOnlyRequires( true );
-    rres = ResPool::instance().resolver().resolvePool();
+    ERR << "lockStatus fork failed" << endl;
+    return 98;
   }
-  if ( ! rres )
+  else if ( pid == 0 )
   {
-    ERR << "resolve " << rres << endl;
-    ResPool::instance().resolver().problems();
-    return false;
+    // child:
+    zypp::base::LogControl::TmpLineWriter shutUp;
+    boost::interprocess::file_lock qmutex( IPMutex().mutexFile().c_str() );
+    if ( qmutex.try_lock() )
+    {
+      qmutex.unlock();
+      exit( 0 );
+    }
+    else if ( qmutex.try_lock_sharable() )
+    {
+      qmutex.unlock_sharable();
+      exit( 1 );
+    }
+    // else
+    exit( 2 );
   }
-  MIL << "resolve " << rres << endl;
-  vdumpPoolStats( USR << "Transacting:"<< endl,
-		  make_filter_begin<resfilter::ByTransact>(ResPool::instance()),
-                  make_filter_end<resfilter::ByTransact>(ResPool::instance()) ) << endl;
+  else
+  {
+    // parent:
+    int ret;
+    int status = 0;
+    do
+    {
+      ret = waitpid( pid, &status, 0 );
+    }
+    while ( ret == -1 && errno == EINTR );
 
-  return true;
+    if ( WIFEXITED( status ) )
+    {
+      _MIL("___MTX___") << "lockStatus " << WEXITSTATUS( status ) << endl;
+      return WEXITSTATUS( status );
+    }
+    _ERR("___MTX___") << "lockStatus failed" << endl;
+    return 99;
+  }
 }
 
-bool install()
+#define LTAG(X) MIL << X << " " << #X << endl;
+
+static weak_ptr<void> wp;
+
+void ssendp( void * )
 {
-  ZYppCommitPolicy pol;
-  pol.dryRun( true );
-  pol.rpmInstFlags( pol.rpmInstFlags().setFlag( target::rpm::RPMINST_JUSTDB ) );
-  SEC << getZYpp()->commit( pol ) << endl;
-  return true;
+  SEC << "endp " << wp.use_count() << endl;
 }
 
+shared_ptr<void> getH()
+{
+  shared_ptr<void> ret( wp.lock() );
+  if ( ! ret )
+  {
+    MIL << endl;
+    ret.reset( static_cast<void*>((void*)1), &ssendp );
+    wp = ret;
+  }
+  return ret;
+}
+shared_ptr<void> getH1()
+{
+  static shared_ptr<void> ret( static_cast<void*>(0), &ssendp );
+  return ret;
+}
 
 /******************************************************************
 **
@@ -64,19 +89,46 @@ int main( int argc, char * argv[] )
 {
   INT << "===[START]==========================================" << endl;
   ///////////////////////////////////////////////////////////////////
-  if ( sysRoot == "/" )
-    ::unsetenv( "ZYPP_CONF" );
-  TestSetup::LoadSystemAt( sysRoot, Arch_x86_64 );
-  ///////////////////////////////////////////////////////////////////
-  ResPool   pool( ResPool::instance() );
-  sat::Pool satpool( sat::Pool::instance() );
-  ///////////////////////////////////////////////////////////////////
 
-//   addConflict( "kernel-default" );
-//   addConflict( "kernel-default-base" );
-  addInstall( "test");
-  solve();
+  IPMutex mutex;
+  MIL << mutex << endl;
+  mutex.lock();
+  MIL << mutex << endl;
+  {
+    IPMutex mutex;
+    MIL << mutex << endl;
 
+  }
+  WAR << mutex << endl;
+
+  ///////////////////////////////////////////////////////////////////
+  INT << "===[END]============================================" << endl << endl;
+  return 0;
+
+
+
+
+  IPMutex::SharableLock slocka( mutex, IPMutex::deferLock );
+  LTAG( slocka );
+  if ( 1 )
+  {
+    IPMutex::SharableLock slock( IPMutex() );
+    LTAG( slock );
+    LTAG( slocka );
+    sleep( 3 );
+    {
+      IPMutex::SharableLock slock2( mutex );
+      LTAG( slock );
+      LTAG( slock2 );
+      sleep( 3 );
+      INT << IPMutex() << endl;
+    }
+    LTAG( slock );
+    sleep( 3 );
+  }
+  MIL << '-' << '(' << lockStatus() << ')' << '(' << mutex << ')' <<endl;
+
+  ///////////////////////////////////////////////////////////////////
   INT << "===[END]============================================" << endl << endl;
   return 0;
 }
